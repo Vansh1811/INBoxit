@@ -1,5 +1,7 @@
 // API service for managing all HTTP requests
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = window.location.protocol === 'https:' 
+  ? 'https://localhost:5000' 
+  : 'http://localhost:5000';
 
 class ApiService {
   constructor() {
