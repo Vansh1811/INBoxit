@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const detectSignupEmails = require('../helpers/fetchEmails');
+const detectSignupEmails = require('../helpers/detectSignupEmails');
 const testGmailConnection = require('../helpers/test');
+const User = require('../models/User');
 
 router.get('/all-signups', async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -14,16 +15,96 @@ router.get('/all-signups', async (req, res) => {
   }
 
   try {
-    // ✅ Pass tokens object with correct structure
+    console.log('🔍 Detecting signup services...');
     const results = await detectSignupEmails({
       accessToken: req.user.accessToken,
       refreshToken: req.user.refreshToken
     });
 
-    res.json(results);
+    // Save to user's profile
+    if (results.length > 0) {
+      await User.findOneAndUpdate(
+        { googleId: req.user.id },
+        { 
+          signupServices: results,
+          lastScan: new Date()
+        },
+        { upsert: true }
+      );
+      console.log(`✅ Saved ${results.length} services to user profile`);
+    }
+
+    res.json({
+      services: results,
+      count: results.length,
+      lastScan: new Date().toISOString(),
+      status: 'success'
+    });
   } catch (err) {
     console.error('Error fetching emails:', err.message);
-    res.status(500).json({ error: 'Failed to fetch signup emails' });
+    res.status(500).json({ 
+      error: 'Failed to fetch signup emails',
+      details: err.message 
+    });
+  }
+});
+
+// Get saved services from database
+router.get('/saved-services', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Not logged in' });
+  }
+
+  try {
+    const user = await User.findOne({ googleId: req.user.id });
+    const services = user?.signupServices || [];
+    
+    res.json({
+      services,
+      count: services.length,
+      lastScan: user?.lastScan,
+      status: 'success'
+    });
+  } catch (err) {
+    console.error('Error fetching saved services:', err.message);
+    res.status(500).json({ error: 'Failed to fetch saved services' });
+  }
+});
+
+// Update service status (unsubscribe/ignore)
+router.post('/update-service', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Not logged in' });
+  }
+
+  const { domain, action } = req.body; // action: 'unsubscribe' or 'ignore'
+
+  try {
+    const user = await User.findOne({ googleId: req.user.id });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const serviceIndex = user.signupServices.findIndex(s => s.domain === domain);
+    if (serviceIndex === -1) {
+      return res.status(404).json({ error: 'Service not found' });
+    }
+
+    if (action === 'unsubscribe') {
+      user.signupServices[serviceIndex].unsubscribed = true;
+    } else if (action === 'ignore') {
+      user.signupServices[serviceIndex].ignored = true;
+    }
+
+    await user.save();
+    
+    res.json({
+      message: `Service ${action}d successfully`,
+      status: 'success'
+    });
+  } catch (err) {
+    console.error('Error updating service:', err.message);
+    res.status(500).json({ error: 'Failed to update service' });
   }
 });
 
