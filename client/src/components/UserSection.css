@@ -1,0 +1,90 @@
+.user-section {
+  padding: 20px;
+  background-color: #f5f5f5;
+  border-radius: 12px;
+  max-width: 700px;
+  margin: 0 auto;
+  font-family: sans-serif;
+}
+
+.services-list,
+.platforms-list {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 10px;
+}
+
+.service-item,
+.platform-item {
+  background: #fff;
+  border: 1px solid #ddd;
+  padding: 10px 15px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.connected-status {
+  color: green;
+  margin-top: 5px;
+  font-size: 14px;
+}
+
+.platform-sender {
+  color: #666;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.platforms-section {
+  margin-top: 20px;
+}
+
+.scan-button-container {
+  margin-top: 20px;
+}
+
+.scan-button {
+  background-color: #007bff;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.scan-button:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.no-platforms {
+  margin-top: 20px;
+}
+
+.helper-text {
+  font-size: 14px;
+  color: #888;
+}
+
+.error-container {
+  padding: 20px;
+  background-color: #ffe5e5;
+  border: 1px solid #ffcccc;
+  border-radius: 10px;
+  max-width: 600px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+.retry-button {
+  margin-top: 15px;
+  padding: 10px 20px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}

@@ -1,0 +1,28 @@
+.login-section {
+  margin: 40px 0;
+  animation: fadeIn 1s ease-out;
+}
+
+.login-section p {
+  font-size: 18px;
+  margin-bottom: 20px;
+  opacity: 0.9;
+}
+
+.login-btn {
+  background: linear-gradient(45deg, #4285f4, #34a853);
+  color: white;
+  font-size: 18px;
+  padding: 15px 30px;
+  margin: 20px 0;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.login-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}

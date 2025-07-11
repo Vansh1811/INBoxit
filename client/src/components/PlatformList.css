@@ -1,0 +1,16 @@
+.platforms-section {
+  margin-top: 20px;
+}
+
+.platform-card {
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+}
+
+.platform-status {
+  color: green;
+  margin-left: 10px;
+}

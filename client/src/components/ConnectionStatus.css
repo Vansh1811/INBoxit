@@ -1,0 +1,17 @@
+.connection-status {
+  margin-top: 10px;
+  font-size: 14px;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.connection-status.success {
+  background-color: #e6ffe6;
+  color: #2d862d;
+}
+
+.connection-status.error {
+  background-color: #ffe6e6;
+  color: #b30000;
+}
