@@ -1,4 +1,6 @@
-const { google } = require('googleapis');
+const gmailBatchProcessor = require('./gmailBatchProcessor');
+const logger = require('../utils/logger');
+const { getUserServices, setUserServices } = require('../utils/cache');
 
 /**
  * Extract clean email address from "From" header
@@ -89,113 +91,195 @@ const isSignupEmail = (subject, from) => {
 };
 
 /**
- * Create Gmail client with proper authentication
- */
-function getGmailClient({ accessToken, refreshToken }) {
-  const client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_CALLBACK_URL
-  );
-
-  client.setCredentials({ 
-    access_token: accessToken, 
-    ...(refreshToken && { refresh_token: refreshToken })
-  });
-
-  return google.gmail({ version: 'v1', auth: client });
-}
-
-/**
  * Main function to detect signup emails and extract platform services
  */
-async function detectSignupEmails(tokens) {
-  if (!tokens.accessToken) {
-    throw new Error('Access token missing');
+async function detectSignupEmails(user, forceRefresh = false) {
+  if (!user.accessToken) {
+    throw new Error('User access token missing');
   }
 
-  const gmail = getGmailClient(tokens);
-  const servicesMap = new Map();
-
-  console.log('🔍 Starting signup email detection...');
-
-  // Search for signup-related emails
-  const { data } = await gmail.users.messages.list({
-    userId: 'me',
-    labelIds: ['INBOX'],
-    maxResults: 200,
-    q: 'welcome OR verify OR signup OR "sign up" OR "account created" OR "thank you" OR confirm OR activate OR registration OR "getting started" OR "new account" after:2022/01/01'
-  });
-
-  const messages = data.messages || [];
-  console.log(`📧 Found ${messages.length} potential signup emails`);
-
-  if (!messages.length) {
-    console.log('⚠️ No signup emails found');
-    return [];
-  }
-
-  // Domains to exclude (personal email providers)
-  const excludedDomains = [
-    'gmail.com', 'outlook.com', 'yahoo.com', 'hotmail.com',
-    'icloud.com', 'aol.com', 'protonmail.com', 'live.com',
-    'msn.com', 'ymail.com', 'mail.com'
-  ];
-
-  // Process each message
-  for (const msg of messages) {
-    try {
-      const { data: messageData } = await gmail.users.messages.get({
-        userId: 'me',
-        id: msg.id,
-        format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date'],
-      });
-
-      const headers = messageData.payload.headers;
-      const fromHeader = headers.find(h => h.name === 'From')?.value || '';
-      const subject = headers.find(h => h.name === 'Subject')?.value || '';
-      const date = headers.find(h => h.name === 'Date')?.value || '';
-
-      // Extract email and validate
-      const email = extractEmail(fromHeader);
-      if (!email.includes('@')) continue;
-
-      const domain = email.split('@')[1];
-      if (!domain || excludedDomains.includes(domain)) continue;
-
-      // Check if it's a signup email
-      if (!isSignupEmail(subject, fromHeader)) continue;
-
-      // Extract platform name
-      const platformName = extractSenderName(fromHeader, domain);
-
-      // Store unique service (deduplicate by domain)
-      if (!servicesMap.has(domain)) {
-        servicesMap.set(domain, {
-          platform: platformName,
-          email: email,
-          domain: domain,
-          subject: subject.substring(0, 100), // Truncate long subjects
-          date: date,
-          lastSeen: new Date().toISOString(),
-          suspicious: false // Will be updated by GPT analysis later
-        });
-
-        console.log(`✅ Found service: ${platformName} (${domain})`);
-      }
-
-    } catch (err) {
-      console.error(`❌ Error processing message ${msg.id}:`, err.message);
-      continue;
+  // Check cache first unless force refresh
+  if (!forceRefresh) {
+    const cached = getUserServices(user.id);
+    if (cached) {
+      logger.info('Returning cached signup services', { userId: user.id });
+      return cached;
     }
   }
 
-  const results = Array.from(servicesMap.values());
-  console.log(`🎯 Total unique services detected: ${results.length}`);
-  console.log('📋 Services found:', results.map(s => s.platform).join(', '));
+  const servicesMap = new Map();
 
-  return results;
+  logger.info('Starting signup email detection', { userId: user.id });
+
+  try {
+    // Use batch processor for efficient email fetching
+    const query = 'welcome OR verify OR signup OR "sign up" OR "account created" OR "thank you" OR confirm OR activate OR registration OR "getting started" OR "new account" after:2022/01/01';
+    const messages = await gmailBatchProcessor.fetchEmailsInBatches(user, query, 300);
+
+    logger.info(`Found ${messages.length} potential signup emails`, { userId: user.id });
+
+    if (!messages.length) {
+      logger.info('No signup emails found', { userId: user.id });
+      return [];
+    }
+
+    // Domains to exclude (personal email providers)
+    const excludedDomains = [
+      'gmail.com', 'outlook.com', 'yahoo.com', 'hotmail.com',
+      'icloud.com', 'aol.com', 'protonmail.com', 'live.com',
+      'msn.com', 'ymail.com', 'mail.com'
+    ];
+
+    // Process each message
+    for (const messageData of messages) {
+      try {
+        const headers = messageData.payload.headers;
+        const fromHeader = headers.find(h => h.name === 'From')?.value || '';
+        const subject = headers.find(h => h.name === 'Subject')?.value || '';
+        const date = headers.find(h => h.name === 'Date')?.value || '';
+
+        // Extract email and validate
+        const email = extractEmail(fromHeader);
+        if (!email.includes('@')) continue;
+
+        const domain = email.split('@')[1];
+        if (!domain || excludedDomains.includes(domain)) continue;
+
+        // Check if it's a signup email
+        if (!isSignupEmail(subject, fromHeader)) continue;
+
+        // Extract platform name
+        const platformName = extractSenderName(fromHeader, domain);
+
+        // Store unique service (deduplicate by domain)
+        if (!servicesMap.has(domain)) {
+          servicesMap.set(domain, {
+            platform: platformName,
+            email: email,
+            domain: domain,
+            subject: subject.substring(0, 100), // Truncate long subjects
+            date: date,
+            lastSeen: new Date().toISOString(),
+            suspicious: false, // Will be updated by AI analysis later
+            unsubscribed: false,
+            ignored: false
+          });
+
+          logger.debug(`Found signup service: ${platformName} (${domain})`);
+        }
+
+      } catch (err) {
+        logger.warn(`Error processing message ${messageData.id}`, {
+          error: err.message,
+          userId: user.id
+        });
+        continue;
+      }
+    }
+
+    const results = Array.from(servicesMap.values());
+    
+    logger.info(`Signup email detection completed`, {
+      userId: user.id,
+      servicesFound: results.length,
+      services: results.map(s => s.platform).join(', ')
+    });
+
+    // Cache the results
+    setUserServices(user.id, results, 1800); // Cache for 30 minutes
+
+    return results;
+
+  } catch (error) {
+    logger.error('Signup email detection failed', {
+      userId: user.id,
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
 }
 
-module.exports = detectSignupEmails;
+/**
+ * Incremental detection - only process new emails since last scan
+ */
+async function detectNewSignupEmails(user, lastScanDate) {
+  try {
+    logger.info('Starting incremental signup detection', {
+      userId: user.id,
+      lastScan: lastScanDate
+    });
+
+    const messages = await gmailBatchProcessor.incrementalSync(user, lastScanDate);
+    
+    if (!messages.length) {
+      logger.info('No new emails found since last scan', { userId: user.id });
+      return [];
+    }
+
+    // Process new messages using the same logic as full detection
+    const servicesMap = new Map();
+    const excludedDomains = [
+      'gmail.com', 'outlook.com', 'yahoo.com', 'hotmail.com',
+      'icloud.com', 'aol.com', 'protonmail.com', 'live.com',
+      'msn.com', 'ymail.com', 'mail.com'
+    ];
+
+    for (const messageData of messages) {
+      try {
+        const headers = messageData.payload.headers;
+        const fromHeader = headers.find(h => h.name === 'From')?.value || '';
+        const subject = headers.find(h => h.name === 'Subject')?.value || '';
+        const date = headers.find(h => h.name === 'Date')?.value || '';
+
+        const email = extractEmail(fromHeader);
+        if (!email.includes('@')) continue;
+
+        const domain = email.split('@')[1];
+        if (!domain || excludedDomains.includes(domain)) continue;
+
+        if (!isSignupEmail(subject, fromHeader)) continue;
+
+        const platformName = extractSenderName(fromHeader, domain);
+
+        if (!servicesMap.has(domain)) {
+          servicesMap.set(domain, {
+            platform: platformName,
+            email: email,
+            domain: domain,
+            subject: subject.substring(0, 100),
+            date: date,
+            lastSeen: new Date().toISOString(),
+            suspicious: false,
+            unsubscribed: false,
+            ignored: false,
+            isNew: true // Mark as new for UI highlighting
+          });
+        }
+
+      } catch (err) {
+        logger.warn(`Error processing new message`, {
+          error: err.message,
+          userId: user.id
+        });
+        continue;
+      }
+    }
+
+    const newServices = Array.from(servicesMap.values());
+    
+    logger.info(`Incremental detection completed`, {
+      userId: user.id,
+      newServicesFound: newServices.length
+    });
+
+    return newServices;
+
+  } catch (error) {
+    logger.error('Incremental signup detection failed', {
+      userId: user.id,
+      error: error.message
+    });
+    throw error;
+  }
+}

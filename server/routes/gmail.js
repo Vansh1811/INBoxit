@@ -1,25 +1,40 @@
 const express = require('express');
 const router = express.Router();
 const detectSignupEmails = require('../helpers/detectSignupEmails');
+const { detectNewSignupEmails } = require('../helpers/detectSignupEmails');
 const testGmailConnection = require('../helpers/test');
+const tokenManager = require('../utils/tokenManager');
+const logger = require('../utils/logger');
+const { clearUserCache } = require('../utils/cache');
+const { gmailLimiter } = require('../middleware/rateLimiter');
+const { validateUpdateService, validatePagination } = require('../middleware/validation');
+const { asyncHandler } = require('../middleware/errorHandler');
 const User = require('../models/User');
 
-router.get('/all-signups', async (req, res) => {
+// Apply rate limiting to all Gmail routes
+router.use(gmailLimiter);
+
+router.get('/all-signups', asyncHandler(async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
 
-  // ✅ Check if tokens exist
+  const forceRefresh = req.query.refresh === 'true';
+
   if (!req.user.accessToken) {
-    return res.status(400).json({ error: 'Access token missing - please log in again' });
+    return res.status(401).json({ 
+      error: 'Access token missing - please log in again',
+      action: 'REAUTH_REQUIRED'
+    });
   }
 
   try {
-    console.log('🔍 Detecting signup services...');
-    const results = await detectSignupEmails({
-      accessToken: req.user.accessToken,
-      refreshToken: req.user.refreshToken
+    logger.info('Detecting signup services', { 
+      userId: req.user.id,
+      forceRefresh 
     });
+
+    const results = await detectSignupEmails(req.user, forceRefresh);
 
     // Save to user's profile
     if (results.length > 0) {
@@ -31,7 +46,7 @@ router.get('/all-signups', async (req, res) => {
         },
         { upsert: true }
       );
-      console.log(`✅ Saved ${results.length} services to user profile`);
+      logger.info(`Saved ${results.length} services to user profile`, { userId: req.user.id });
     }
 
     res.json({
@@ -41,16 +56,19 @@ router.get('/all-signups', async (req, res) => {
       status: 'success'
     });
   } catch (err) {
-    console.error('Error fetching emails:', err.message);
+    logger.error('Error fetching signup emails', {
+      userId: req.user.id,
+      error: err.message
+    });
     res.status(500).json({ 
       error: 'Failed to fetch signup emails',
       details: err.message 
     });
   }
-});
+}));
 
 // Get saved services from database
-router.get('/saved-services', async (req, res) => {
+router.get('/saved-services', validatePagination, asyncHandler(async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -59,20 +77,32 @@ router.get('/saved-services', async (req, res) => {
     const user = await User.findOne({ googleId: req.user.id });
     const services = user?.signupServices || [];
     
+    // Apply pagination if requested
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const startIndex = (page - 1) * limit;
+    const paginatedServices = services.slice(startIndex, startIndex + limit);
+    
     res.json({
-      services,
-      count: services.length,
+      services: paginatedServices,
+      total: services.length,
+      page,
+      limit,
+      hasMore: startIndex + limit < services.length,
       lastScan: user?.lastScan,
       status: 'success'
     });
   } catch (err) {
-    console.error('Error fetching saved services:', err.message);
+    logger.error('Error fetching saved services', {
+      userId: req.user.id,
+      error: err.message
+    });
     res.status(500).json({ error: 'Failed to fetch saved services' });
   }
-});
+}));
 
 // Update service status (unsubscribe/ignore)
-router.post('/update-service', async (req, res) => {
+router.post('/update-service', validateUpdateService, asyncHandler(async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -90,55 +120,122 @@ router.post('/update-service', async (req, res) => {
       return res.status(404).json({ error: 'Service not found' });
     }
 
-    if (action === 'unsubscribe') {
-      user.signupServices[serviceIndex].unsubscribed = true;
-    } else if (action === 'ignore') {
-      user.signupServices[serviceIndex].ignored = true;
+    const service = user.signupServices[serviceIndex];
+    
+    switch (action) {
+      case 'unsubscribe':
+        service.unsubscribed = true;
+        service.unsubscribedAt = new Date();
+        break;
+      case 'ignore':
+        service.ignored = true;
+        service.ignoredAt = new Date();
+        break;
+      case 'restore':
+        service.unsubscribed = false;
+        service.ignored = false;
+        service.unsubscribedAt = null;
+        service.ignoredAt = null;
+        break;
     }
 
     await user.save();
+    
+    // Clear user cache to force refresh
+    clearUserCache(req.user.id);
+    
+    logger.info(`Service ${action}d successfully`, {
+      userId: req.user.id,
+      domain,
+      action
+    });
     
     res.json({
       message: `Service ${action}d successfully`,
       status: 'success'
     });
   } catch (err) {
-    console.error('Error updating service:', err.message);
+    logger.error('Error updating service', {
+      userId: req.user.id,
+      domain,
+      action,
+      error: err.message
+    });
     res.status(500).json({ error: 'Failed to update service' });
   }
-});
+}));
 
-router.get('/test-connection', async (req, res) => {
-  console.log('🔍 /test-connection called');
-  console.log('🔍 Is authenticated:', req.isAuthenticated());
-  console.log('🔍 User object exists:', !!req.user);
-  console.log('🔍 Access token exists:', !!req.user?.accessToken);
-  
+// Get new services since last scan
+router.get('/new-services', asyncHandler(async (req, res) => {
   if (!req.isAuthenticated()) {
-    console.log('❌ Not authenticated');
     return res.status(401).json({ message: 'Not logged in' });
   }
 
-  // ✅ Check if tokens exist
+  try {
+    const user = await User.findOne({ googleId: req.user.id });
+    const lastScan = user?.lastScan;
+    
+    if (!lastScan) {
+      return res.json({
+        services: [],
+        message: 'No previous scan found. Run full scan first.',
+        status: 'success'
+      });
+    }
+
+    const newServices = await detectNewSignupEmails(req.user, lastScan);
+    
+    res.json({
+      services: newServices,
+      count: newServices.length,
+      lastScan,
+      status: 'success'
+    });
+  } catch (err) {
+    logger.error('Error fetching new services', {
+      userId: req.user.id,
+      error: err.message
+    });
+    res.status(500).json({ error: 'Failed to fetch new services' });
+  }
+}));
+
+router.get('/test-connection', asyncHandler(async (req, res) => {
+  logger.debug('Gmail connection test requested', {
+    userId: req.user?.id,
+    hasAccessToken: !!req.user?.accessToken
+  });
+  
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Not logged in' });
+  }
+
   if (!req.user.accessToken) {
-    console.log('❌ Access token missing from user object');
-    return res.status(400).json({ error: 'Access token missing - please log in again' });
+    return res.status(401).json({ 
+      error: 'Access token missing - please log in again',
+      action: 'REAUTH_REQUIRED'
+    });
   }
 
   try {
-    console.log('✅ Calling testGmailConnection with tokens...');
-    // ✅ Pass tokens object with correct structure
-    const result = await testGmailConnection({
-      accessToken: req.user.accessToken,
-      refreshToken: req.user.refreshToken
-    });
+    // Validate and refresh token if needed
+    const tokens = await tokenManager.validateAndRefreshToken(req.user);
+    
+    const result = await testGmailConnection(tokens);
 
-    console.log('✅ Gmail test successful:', result);
+    logger.info('Gmail connection test successful', {
+      userId: req.user.id,
+      email: result.email
+    });
+    
     res.json(result);
   } catch (err) {
-    console.error('❌ Gmail test failed:', err.message);
+    logger.error('Gmail connection test failed', {
+      userId: req.user.id,
+      error: err.message
+    });
     res.status(400).json({ error: err.message });
   }
-});
+}));
 
 module.exports = router;

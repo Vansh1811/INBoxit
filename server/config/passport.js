@@ -12,9 +12,9 @@ passport.use(new GoogleStrategy({
     id: profile.id,
     displayName: profile.displayName,
     emails: profile.emails,
-    // ✅ Store tokens directly on user object, not nested
     accessToken,
-    refreshToken
+    refreshToken,
+    tokenExpiry: Date.now() + (3600 * 1000) // 1 hour from now
   };
   return done(null, user);
 }

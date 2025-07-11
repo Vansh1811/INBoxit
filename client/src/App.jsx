@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './App.css';
+import ErrorBoundary from './components/ErrorBoundary';
+import './components/ErrorBoundary.css';
 import Header from './components/Header';
 import LoginSection from './components/LoginSection';
 import ConnectionStatus from './components/ConnectionStatus';
@@ -64,17 +66,19 @@ function App() {
   }
 
   return (
-    <div className={`app ${darkMode ? 'dark-mode' : ''}`}>
-      <Header user={user} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
-      {!user ? (
-        <LoginSection />
-      ) : (
-        <>
-          <ConnectionStatus status={status} retry={testGmailConnection} />
-          <Dashboard />
-        </>
-      )}
-    </div>
+    <ErrorBoundary>
+      <div className={`app ${darkMode ? 'dark-mode' : ''}`}>
+        <Header user={user} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        {!user ? (
+          <LoginSection />
+        ) : (
+          <>
+            <ConnectionStatus status={status} retry={testGmailConnection} />
+            <Dashboard />
+          </>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 
