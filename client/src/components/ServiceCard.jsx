@@ -355,25 +355,3 @@ function ServiceCard({
 }
 
 export default ServiceCard;
-        <div className="service-actions">
-          <button
-            className="action-btn unsubscribe-btn"
-            onClick={() => handleAction('unsubscribe')}
-            disabled={isLoading}
-          >
-            {isLoading ? '⏳' : '🚫'} Unsubscribe
-          </button>
-          <button
-            className="action-btn ignore-btn"
-            onClick={() => handleAction('ignore')}
-            disabled={isLoading}
-          >
-            {isLoading ? '⏳' : '👁️'} Ignore
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default ServiceCard;
