@@ -1,20 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const detectSignupEmails = require('../helpers/detectSignupEmails');
-const { detectNewSignupEmails } = require('../helpers/detectSignupEmails');
+const { detectSignupEmails, detectNewSignupEmails } = require('../helpers/detectSignupEmails');
 const testGmailConnection = require('../helpers/test');
 const tokenManager = require('../utils/tokenManager');
 const logger = require('../utils/logger');
 const { clearUserCache } = require('../utils/cache');
-const { gmailLimiter } = require('../middleware/rateLimiter');
-const { validateUpdateService, validatePagination } = require('../middleware/validation');
-const { asyncHandler } = require('../middleware/errorHandler');
 const User = require('../models/User');
 
-// Apply rate limiting to all Gmail routes
-router.use(gmailLimiter);
+// Simple async handler for now
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 
-router.get('/all-signups', asyncHandler(async (req, res) => {
+router.get('/all-signups', async (req, res) => {
+  try {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -65,10 +64,18 @@ router.get('/all-signups', asyncHandler(async (req, res) => {
       details: err.message 
     });
   }
-}));
+  } catch (err) {
+    console.error('Gmail route error:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch signup emails',
+      details: err.message 
+    });
+  }
+});
 
 // Get saved services from database
-router.get('/saved-services', validatePagination, asyncHandler(async (req, res) => {
+router.get('/saved-services', async (req, res) => {
+  try {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -99,10 +106,15 @@ router.get('/saved-services', validatePagination, asyncHandler(async (req, res) 
     });
     res.status(500).json({ error: 'Failed to fetch saved services' });
   }
-}));
+  } catch (err) {
+    console.error('Saved services error:', err);
+    res.status(500).json({ error: 'Failed to fetch saved services' });
+  }
+});
 
 // Update service status (unsubscribe/ignore)
-router.post('/update-service', validateUpdateService, asyncHandler(async (req, res) => {
+router.post('/update-service', async (req, res) => {
+  try {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -142,7 +154,7 @@ router.post('/update-service', validateUpdateService, asyncHandler(async (req, r
     await user.save();
     
     // Clear user cache to force refresh
-    clearUserCache(req.user.id);
+    // clearUserCache(req.user.id);
     
     logger.info(`Service ${action}d successfully`, {
       userId: req.user.id,
@@ -163,10 +175,15 @@ router.post('/update-service', validateUpdateService, asyncHandler(async (req, r
     });
     res.status(500).json({ error: 'Failed to update service' });
   }
-}));
+  } catch (err) {
+    console.error('Update service error:', err);
+    res.status(500).json({ error: 'Failed to update service' });
+  }
+});
 
 // Get new services since last scan
-router.get('/new-services', asyncHandler(async (req, res) => {
+router.get('/new-services', async (req, res) => {
+  try {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -198,9 +215,14 @@ router.get('/new-services', asyncHandler(async (req, res) => {
     });
     res.status(500).json({ error: 'Failed to fetch new services' });
   }
-}));
+  } catch (err) {
+    console.error('New services error:', err);
+    res.status(500).json({ error: 'Failed to fetch new services' });
+  }
+});
 
-router.get('/test-connection', asyncHandler(async (req, res) => {
+router.get('/test-connection', async (req, res) => {
+  try {
   logger.debug('Gmail connection test requested', {
     userId: req.user?.id,
     hasAccessToken: !!req.user?.accessToken
@@ -236,6 +258,10 @@ router.get('/test-connection', asyncHandler(async (req, res) => {
     });
     res.status(400).json({ error: err.message });
   }
-}));
+  } catch (err) {
+    console.error('Test connection error:', err);
+    res.status(500).json({ error: 'Failed to test connection' });
+  }
+});
 
 module.exports = router;

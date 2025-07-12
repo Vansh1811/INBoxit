@@ -1,6 +1,7 @@
-const gmailBatchProcessor = require('./gmailBatchProcessor');
+// const gmailBatchProcessor = require('./gmailBatchProcessor');
 const logger = require('../utils/logger');
-const { getUserServices, setUserServices } = require('../utils/cache');
+// const { getUserServices, setUserServices } = require('../utils/cache');
+const { google } = require('googleapis');
 
 /**
  * Extract clean email address from "From" header
@@ -10,6 +11,20 @@ const extractEmail = (from) => {
   const match = from.match(/<(.+)>/);
   return (match ? match[1] : from).toLowerCase().trim();
 };
+
+/**
+ * Create Gmail client
+ */
+function getGmailClient(accessToken) {
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({
+    access_token: accessToken,
+  });
+  return google.gmail({
+    version: 'v1',
+    auth: oauth2Client,
+  });
+}
 
 /**
  * Extract sender name from "From" header, fallback to domain
@@ -98,23 +113,22 @@ async function detectSignupEmails(user, forceRefresh = false) {
     throw new Error('User access token missing');
   }
 
-  // Check cache first unless force refresh
-  if (!forceRefresh) {
-    const cached = getUserServices(user.id);
-    if (cached) {
-      logger.info('Returning cached signup services', { userId: user.id });
-      return cached;
-    }
-  }
-
   const servicesMap = new Map();
 
   logger.info('Starting signup email detection', { userId: user.id });
 
   try {
-    // Use batch processor for efficient email fetching
-    const query = 'welcome OR verify OR signup OR "sign up" OR "account created" OR "thank you" OR confirm OR activate OR registration OR "getting started" OR "new account" after:2022/01/01';
-    const messages = await gmailBatchProcessor.fetchEmailsInBatches(user, query, 300);
+    // Simple Gmail API call for now
+    const gmail = getGmailClient(user.accessToken);
+    
+    const { data } = await gmail.users.messages.list({
+      userId: 'me',
+      labelIds: ['INBOX'],
+      maxResults: 50,
+      q: 'welcome OR verify OR signup OR "sign up" OR "account created" OR "thank you" OR confirm OR activate OR registration OR "getting started"'
+    });
+
+    const messages = data.messages || [];
 
     logger.info(`Found ${messages.length} potential signup emails`, { userId: user.id });
 
@@ -131,8 +145,15 @@ async function detectSignupEmails(user, forceRefresh = false) {
     ];
 
     // Process each message
-    for (const messageData of messages) {
+    for (const msg of messages) {
       try {
+        const { data: messageData } = await gmail.users.messages.get({
+          userId: 'me',
+          id: msg.id,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date'],
+        });
+
         const headers = messageData.payload.headers;
         const fromHeader = headers.find(h => h.name === 'From')?.value || '';
         const subject = headers.find(h => h.name === 'Subject')?.value || '';
@@ -169,7 +190,7 @@ async function detectSignupEmails(user, forceRefresh = false) {
         }
 
       } catch (err) {
-        logger.warn(`Error processing message ${messageData.id}`, {
+        logger.warn(`Error processing message ${msg.id}`, {
           error: err.message,
           userId: user.id
         });
@@ -184,9 +205,6 @@ async function detectSignupEmails(user, forceRefresh = false) {
       servicesFound: results.length,
       services: results.map(s => s.platform).join(', ')
     });
-
-    // Cache the results
-    setUserServices(user.id, results, 1800); // Cache for 30 minutes
 
     return results;
 
@@ -210,7 +228,18 @@ async function detectNewSignupEmails(user, lastScanDate) {
       lastScan: lastScanDate
     });
 
-    const messages = await gmailBatchProcessor.incrementalSync(user, lastScanDate);
+    // Simple implementation for now
+    const gmail = getGmailClient(user.accessToken);
+    const afterDate = Math.floor(new Date(lastScanDate).getTime() / 1000);
+    
+    const { data } = await gmail.users.messages.list({
+      userId: 'me',
+      labelIds: ['INBOX'],
+      maxResults: 50,
+      q: `after:${afterDate} (welcome OR verify OR signup OR "sign up" OR "account created" OR "thank you" OR confirm OR activate OR registration OR "getting started")`
+    });
+
+    const messages = data.messages || [];
     
     if (!messages.length) {
       logger.info('No new emails found since last scan', { userId: user.id });
@@ -225,8 +254,15 @@ async function detectNewSignupEmails(user, lastScanDate) {
       'msn.com', 'ymail.com', 'mail.com'
     ];
 
-    for (const messageData of messages) {
+    for (const msg of messages) {
       try {
+        const { data: messageData } = await gmail.users.messages.get({
+          userId: 'me',
+          id: msg.id,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date'],
+        });
+
         const headers = messageData.payload.headers;
         const fromHeader = headers.find(h => h.name === 'From')?.value || '';
         const subject = headers.find(h => h.name === 'Subject')?.value || '';
@@ -283,3 +319,8 @@ async function detectNewSignupEmails(user, lastScanDate) {
     throw error;
   }
 }
+
+module.exports = {
+  detectSignupEmails,
+  detectNewSignupEmails
+};
