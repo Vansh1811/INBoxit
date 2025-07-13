@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { 
+  Search, Filter, BarChart3, TrendingUp, AlertTriangle, CheckCircle, 
+  Eye, EyeOff, Settings as SettingsIcon, LogOut, User, Mail
+} from 'lucide-react';
 import ServiceCard from '../components/ServiceCard';
 import SearchBar from '../components/ui/SearchBar';
+import Pagination from '../components/ui/Pagination';
+import InfiniteScroll from '../components/ui/InfiniteScroll';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ProgressBar from '../components/ui/ProgressBar';
 import AnimatedCard from '../components/ui/AnimatedCard';
@@ -14,13 +20,42 @@ import apiService from '../services/api';
 import './Dashboard.css';
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastScan, setLastScan] = useState(null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [viewMode, setViewMode] = useLocalStorage('dashboard-view-mode', 'all');
+  const [paginationMode, setPaginationMode] = useLocalStorage('pagination-mode', 'pagination'); // 'pagination' or 'infinite'
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
   const [scanProgress, setScanProgress] = useState(0);
+  const [user, setUser] = useState(null);
+  const [darkMode, setDarkMode] = useLocalStorage('darkMode', false);
+
+  // Load user info
+  useEffect(() => {
+    loadUserInfo();
+  }, []);
+
+  const loadUserInfo = async () => {
+    try {
+      const userData = await apiService.checkLoginStatus();
+      setUser(userData);
+    } catch (error) {
+      console.error('Failed to load user info:', error);
+    }
+  };
+
+  const handleLogout = () => {
+    window.location.href = 'http://localhost:5000/auth/logout';
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+    document.documentElement.classList.toggle('dark', !darkMode);
+  };
 
   // Search and filter configuration
   const searchFilters = [
@@ -202,6 +237,24 @@ function Dashboard() {
 
   const displayServices = getFilteredServicesByView();
   
+  // Pagination logic
+  const totalPages = Math.ceil(displayServices.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedServices = paginationMode === 'pagination' 
+    ? displayServices.slice(startIndex, startIndex + itemsPerPage)
+    : displayServices.slice(0, currentPage * itemsPerPage);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const loadMoreServices = () => {
+    if (currentPage * itemsPerPage < displayServices.length) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+  
   // Calculate comprehensive stats
   const stats = {
     total: services.length,
@@ -253,6 +306,33 @@ function Dashboard() {
       <ToastContainer />
       
       <div className="dashboard-header">
+        {/* User Info & Controls */}
+        <div className="user-controls">
+          {user && (
+            <div className="user-info">
+              <div className="user-avatar">
+                <User className="w-5 h-5" />
+              </div>
+              <div className="user-details">
+                <span className="user-name">{user.name || user.email}</span>
+                <span className="user-email">{user.email}</span>
+              </div>
+            </div>
+          )}
+          
+          <div className="header-actions">
+            <Link to="/settings" className="icon-button">
+              <SettingsIcon className="w-5 h-5" />
+            </Link>
+            <button onClick={toggleDarkMode} className="icon-button">
+              {darkMode ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+            </button>
+            <button onClick={handleLogout} className="icon-button logout">
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
         <div className="header-content">
           <motion.h1 
             className="dashboard-title"
@@ -268,7 +348,6 @@ function Dashboard() {
           </motion.p>
         </div>
         
-        <div className="header-actions">
           <motion.button 
             className="refresh-btn"
             onClick={refreshServices}
@@ -289,7 +368,6 @@ function Dashboard() {
               </>
             )}
           </motion.button>
-        </div>
       </div>
 
       {/* Progress Bar for Scanning */}
@@ -429,10 +507,35 @@ function Dashboard() {
         ))}
       </motion.div>
 
+      {/* Pagination Mode Toggle */}
+      <motion.div 
+        className="pagination-controls"
+        variants={itemVariants}
+      >
+        <div className="pagination-mode-toggle">
+          <button
+            onClick={() => setPaginationMode('pagination')}
+            className={`mode-btn ${paginationMode === 'pagination' ? 'active' : ''}`}
+          >
+            Pages
+          </button>
+          <button
+            onClick={() => setPaginationMode('infinite')}
+            className={`mode-btn ${paginationMode === 'infinite' ? 'active' : ''}`}
+          >
+            Infinite Scroll
+          </button>
+        </div>
+        
+        <div className="results-info">
+          Showing {paginatedServices.length} of {displayServices.length} services
+        </div>
+      </motion.div>
+
       <div className="dashboard-info">
         <p className="last-scan">
           <strong>Last scan:</strong> {formatLastScan(lastScan)} • 
-          <strong> Showing:</strong> {displayServices.length} of {services.length} services
+          <strong> Total services:</strong> {services.length}
         </p>
       </div>
 
@@ -481,8 +584,127 @@ function Dashboard() {
       )}
 
       {/* Services Grid */}
-      <AnimatePresence mode="wait">
-        {displayServices.length > 0 && (
+      {paginationMode === 'pagination' ? (
+        <AnimatePresence mode="wait">
+          {paginatedServices.length > 0 && (
+            <motion.div 
+              className="services-section"
+              variants={itemVariants}
+              key={viewMode}
+            >
+              <motion.h2 
+                className="section-title"
+                variants={itemVariants}
+              >
+                {viewMode === 'all' && `📧 All Services (${displayServices.length})`}
+                {viewMode === 'active' && `🔴 Active Services (${displayServices.length})`}
+                {viewMode === 'managed' && `✅ Managed Services (${displayServices.length})`}
+                {viewMode === 'suspicious' && `⚠️ Suspicious Services (${displayServices.length})`}
+              </motion.h2>
+              
+              <motion.div 
+                className="services-grid"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+              >
+                <AnimatePresence>
+                  {paginatedServices.map((service, index) => (
+                    <ServiceCard
+                      key={service.domain || index}
+                      platform={service.platform}
+                      email={service.email}
+                      domain={service.domain}
+                      subject={service.subject}
+                      date={service.date}
+                      suspicious={service.suspicious || service.suspiciousAnalysis?.isSuspicious}
+                      unsubscribed={service.unsubscribed}
+                      ignored={service.ignored}
+                      onUnsubscribe={handleUnsubscribe}
+                      onIgnore={handleIgnore}
+                    />
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+              
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <motion.div 
+                  className="pagination-wrapper"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                    className="dashboard-pagination"
+                  />
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      ) : (
+        // Infinite Scroll Mode
+        <AnimatePresence mode="wait">
+          {displayServices.length > 0 && (
+            <motion.div 
+              className="services-section"
+              variants={itemVariants}
+              key={viewMode}
+            >
+              <motion.h2 
+                className="section-title"
+                variants={itemVariants}
+              >
+                {viewMode === 'all' && `📧 All Services (${displayServices.length})`}
+                {viewMode === 'active' && `🔴 Active Services (${displayServices.length})`}
+                {viewMode === 'managed' && `✅ Managed Services (${displayServices.length})`}
+                {viewMode === 'suspicious' && `⚠️ Suspicious Services (${displayServices.length})`}
+              </motion.h2>
+              
+              <InfiniteScroll
+                hasMore={currentPage * itemsPerPage < displayServices.length}
+                loading={false}
+                onLoadMore={loadMoreServices}
+                className="infinite-scroll-container"
+              >
+                <motion.div 
+                  className="services-grid"
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <AnimatePresence>
+                    {paginatedServices.map((service, index) => (
+                      <ServiceCard
+                        key={service.domain || index}
+                        platform={service.platform}
+                        email={service.email}
+                        domain={service.domain}
+                        subject={service.subject}
+                        date={service.date}
+                        suspicious={service.suspicious || service.suspiciousAnalysis?.isSuspicious}
+                        unsubscribed={service.unsubscribed}
+                        ignored={service.ignored}
+                        onUnsubscribe={handleUnsubscribe}
+                        onIgnore={handleIgnore}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              </InfiniteScroll>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+    </motion.div>
+  );
+}
+
+export default Dashboard;
           <motion.div 
             className="services-section"
             variants={itemVariants}

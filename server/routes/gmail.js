@@ -33,7 +33,16 @@ router.get('/all-signups', async (req, res) => {
       forceRefresh 
     });
 
-    const results = await detectSignupEmails(req.user, forceRefresh);
+    // Enhanced progress tracking
+    const progressCallback = (progress) => {
+      // In a real app, you might use WebSockets to send real-time progress
+      logger.info('Scan progress', {
+        userId: req.user.id,
+        ...progress
+      });
+    };
+
+    const results = await detectSignupEmails(req.user, forceRefresh, progressCallback);
 
     // Save to user's profile
     if (results.length > 0) {
@@ -52,6 +61,11 @@ router.get('/all-signups', async (req, res) => {
       services: results,
       count: results.length,
       lastScan: new Date().toISOString(),
+      scanStats: {
+        totalFound: results.length,
+        suspicious: results.filter(s => s.suspicious).length,
+        domains: [...new Set(results.map(s => s.domain))].length
+      },
       status: 'success'
     });
   } catch (err) {

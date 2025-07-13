@@ -1,19 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import ErrorBoundary from './components/ErrorBoundary';
 import './components/ErrorBoundary.css';
-import Header from './components/Header';
-import LoginSection from './components/LoginSection';
-import ConnectionStatus from './components/ConnectionStatus';
+import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
+import Settings from './pages/Settings';
 import LoadingSpinner from './components/ui/LoadingSpinner';
 import { ToastContainer } from './components/ui/Toast';
 import apiService from './services/api';
 
 function App() {
   const [user, setUser] = useState(null);
-  const [status, setStatus] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -66,7 +65,6 @@ function App() {
         email: data.emails?.[0]?.value || data.email,
       };
       setUser(userObj);
-      testGmailConnection();
     } catch (err) {
       setUser(null);
       console.error('Login check error:', err);
@@ -74,24 +72,6 @@ function App() {
       setIsLoading(false);
     }
   };
-
-  const testGmailConnection = async () => {
-    try {
-      const data = await apiService.testConnection();
-      setStatus({
-        status: 'success',
-        services: data.services || [],
-        message: data.message
-      });
-    } catch (err) {
-      setStatus({
-        status: 'error',
-        message: err.message || 'Connection failed',
-      });
-    }
-  };
-
-  const toggleDarkMode = () => setDarkMode(!darkMode);
 
   if (isLoading) {
     return (
@@ -112,43 +92,27 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <motion.div 
-        className={`app ${darkMode ? 'dark-mode' : ''}`}
-        variants={appVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <ToastContainer />
-        
-        <motion.div variants={contentVariants}>
-          <Header user={user} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
-        </motion.div>
-        
-        <AnimatePresence mode="wait">
-          {!user ? (
-            <motion.div
-              key="login"
-              variants={contentVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              <LoginSection />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="dashboard"
-              variants={contentVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              <ConnectionStatus status={status} retry={testGmailConnection} />
-              <Dashboard />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+      <Router>
+        <div className={`app ${darkMode ? 'dark-mode' : ''}`}>
+          <ToastContainer />
+          
+          <Routes>
+            <Route 
+              path="/" 
+              element={!user ? <LandingPage /> : <Navigate to="/dashboard" replace />} 
+            />
+            <Route 
+              path="/dashboard" 
+              element={user ? <Dashboard /> : <Navigate to="/" replace />} 
+            />
+            <Route 
+              path="/settings" 
+              element={user ? <Settings /> : <Navigate to="/" replace />} 
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </Router>
     </ErrorBoundary>
   );
 }
