@@ -385,7 +385,7 @@ function Dashboard() {
               color="blue"
               animated={true}
             />
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -700,53 +700,6 @@ function Dashboard() {
           )}
         </AnimatePresence>
       )}
-    </motion.div>
-  );
-}
-
-export default Dashboard;
-          <motion.div 
-            className="services-section"
-            variants={itemVariants}
-            key={viewMode}
-          >
-            <motion.h2 
-              className="section-title"
-              variants={itemVariants}
-            >
-              {viewMode === 'all' && `📧 All Services (${displayServices.length})`}
-              {viewMode === 'active' && `🔴 Active Services (${displayServices.length})`}
-              {viewMode === 'managed' && `✅ Managed Services (${displayServices.length})`}
-              {viewMode === 'suspicious' && `⚠️ Suspicious Services (${displayServices.length})`}
-            </motion.h2>
-            
-            <motion.div 
-              className="services-grid"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
-              <AnimatePresence>
-                {displayServices.map((service, index) => (
-                  <ServiceCard
-                    key={service.domain || index}
-                    platform={service.platform}
-                    email={service.email}
-                    domain={service.domain}
-                    subject={service.subject}
-                    date={service.date}
-                    suspicious={service.suspicious || service.suspiciousAnalysis?.isSuspicious}
-                    unsubscribed={service.unsubscribed}
-                    ignored={service.ignored}
-                    onUnsubscribe={handleUnsubscribe}
-                    onIgnore={handleIgnore}
-                  />
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }
