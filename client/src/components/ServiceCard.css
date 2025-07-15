@@ -344,3 +344,26 @@
     align-items: flex-start;
   }
 }
+  .service-card.suspicious .status-badge {
+    background: rgba(245, 158, 11, 0.9);
+    color: #92400e;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+  
+  .service-card.unsubscribed .status-badge {
+    background: rgba(34, 197, 94, 0.9);
+    color: #166534;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+  
+  .service-card.ignored .status-badge {
+    background: rgba(107, 114, 128, 0.9);
+    color: #374151;
+    border: 1px solid rgba(107, 114, 128, 0.3);
+  }
+  .service-card.questionable .status-badge {
+    background: rgba(251, 191, 36, 0.9);
+    color: #a16207;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+  }
+  

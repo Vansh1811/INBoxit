@@ -1,12 +1,24 @@
-# General
+# Top-level dependencies
 node_modules/
 .env
 .env.local
+dist/
+build/
+.DS_Store
 *.log
 
-# React
+# Ignore dependencies in client and server
 client/node_modules/
-client/build/
-
-# Server
 server/node_modules/
+
+# Ignore env files in client and server
+client/.env
+server/.env
+
+# Ignore build folders (React or other)
+client/build/
+server/build/
+
+# Ignore OS or editor-specific files
+client/.DS_Store
+server/.DS_Store

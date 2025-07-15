@@ -1,13 +1,13 @@
 const fs = require('fs');
 const path = require('path');
-
+ 
 // Ensure logs directory exists
 const logsDir = path.join(__dirname, '../logs');
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
-class Logger {
+class Logger { 
   constructor() {
     this.logFile = path.join(logsDir, 'app.log');
     this.errorFile = path.join(logsDir, 'error.log');

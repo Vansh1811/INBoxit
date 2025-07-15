@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { Search, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import ServiceCard from '../components/ServiceCard';
 import SearchBar from '../components/ui/SearchBar';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -22,17 +22,18 @@ function Dashboard() {
   const [viewMode, setViewMode] = useLocalStorage('dashboard-view-mode', 'all');
   const [scanProgress, setScanProgress] = useState(0);
 
-  // Search and filter configuration
   const searchFilters = [
     { id: 'active', label: 'Active Services', count: services.filter(s => !s.unsubscribed && !s.ignored).length },
     { id: 'unsubscribed', label: 'Unsubscribed', count: services.filter(s => s.unsubscribed).length },
     { id: 'ignored', label: 'Ignored', count: services.filter(s => s.ignored).length },
     { id: 'suspicious', label: 'Suspicious', count: services.filter(s => s.suspicious).length },
-    { id: 'recent', label: 'Recent (7 days)', count: services.filter(s => {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      return new Date(s.date) > oneWeekAgo;
-    }).length }
+    {
+      id: 'recent', label: 'Recent (7 days)', count: services.filter(s => {
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        return new Date(s.date) > oneWeekAgo;
+      }).length
+    }
   ];
 
   const sortOptions = [
@@ -42,13 +43,11 @@ function Dashboard() {
     { value: 'suspicious', label: 'Suspicious Score' }
   ];
 
-  // Use search hook for filtering and sorting
   const {
     results: filteredServices,
     handleSearch,
     handleFilter,
-    handleSort,
-    stats: searchStats
+    handleSort
   } = useSearch(services, {
     searchFields: ['platform', 'domain', 'email', 'subject']
   });
@@ -57,23 +56,23 @@ function Dashboard() {
     loadSavedServices();
   }, []);
 
-  useEffect(() => {
-    if (services.length > 0) {
-      performAIAnalysis();
-    }
-  }, [services]);
+ useEffect(() => {
+  if (services.length > 0 && !aiAnalysis) {
+    performAIAnalysis();
+  }
+}, [services]);
 
   const performAIAnalysis = async () => {
     try {
       const analyzedServices = suspiciousEmailDetector.batchAnalyze(services);
       const summary = suspiciousEmailDetector.getAnalysisSummary(analyzedServices);
       setAiAnalysis(summary);
-      
-      // Update services with analysis
-      setServices(prev => prev.map(service => {
-        const analyzed = analyzedServices.find(a => a.domain === service.domain);
-        return analyzed ? { ...service, suspiciousAnalysis: analyzed.suspiciousAnalysis } : service;
-      }));
+      setServices(prev =>
+        prev.map(service => {
+          const analyzed = analyzedServices.find(a => a.domain === service.domain);
+          return analyzed ? { ...service, suspiciousAnalysis: analyzed.suspiciousAnalysis } : service;
+        })
+      );
     } catch (error) {
       console.error('AI analysis failed:', error);
     }
@@ -102,20 +101,15 @@ function Dashboard() {
       setLoading(true);
       setScanProgress(0);
       setError(null);
-      
-      // Simulate progress for better UX
       const progressInterval = setInterval(() => {
         setScanProgress(prev => Math.min(prev + 10, 90));
       }, 200);
-      
+
       const data = await apiService.fetchSignupServices();
       clearInterval(progressInterval);
       setScanProgress(100);
-      
       setServices(data.services || []);
       setLastScan(data.lastScan);
-      
-      // Show success message
       showToast.success(`Found ${data.count || 0} services`);
     } catch (err) {
       setError('Failed to refresh services');
@@ -128,14 +122,14 @@ function Dashboard() {
   };
 
   const handleUnsubscribe = async (domain) => {
+    const action = 'unsubscribe'; // ✅ Fix: Defined action
     try {
-      await apiService.updateServiceStatus(domain, action || 'unsubscribe');
-      
-      setServices(prev => 
-        prev.map(service => 
-          service.domain === domain 
-            ? { 
-                ...service, 
+      await apiService.updateServiceStatus(domain, action);
+      setServices(prev =>
+        prev.map(service =>
+          service.domain === domain
+            ? {
+                ...service,
                 unsubscribed: action === 'restore' ? false : true,
                 ignored: action === 'restore' ? false : service.ignored
               }
@@ -150,10 +144,9 @@ function Dashboard() {
   const handleIgnore = async (domain) => {
     try {
       await apiService.updateServiceStatus(domain, 'ignore');
-      
-      setServices(prev => 
-        prev.map(service => 
-          service.domain === domain 
+      setServices(prev =>
+        prev.map(service =>
+          service.domain === domain
             ? { ...service, ignored: true }
             : service
         )
@@ -165,20 +158,16 @@ function Dashboard() {
 
   const handleBulkAction = async (action, selectedDomains) => {
     const loadingToast = showToast.loading(`Processing ${selectedDomains.length} services...`);
-    
     try {
-      const promises = selectedDomains.map(domain => 
+      const promises = selectedDomains.map(domain =>
         apiService.updateServiceStatus(domain, action)
       );
-      
       await Promise.all(promises);
-      
-      setServices(prev => prev.map(service => 
+      setServices(prev => prev.map(service =>
         selectedDomains.includes(service.domain)
           ? { ...service, [action]: true }
           : service
       ));
-      
       showToast.dismiss(loadingToast);
       showToast.success(`${action} ${selectedDomains.length} services successfully`);
     } catch (error) {
@@ -201,8 +190,7 @@ function Dashboard() {
   };
 
   const displayServices = getFilteredServicesByView();
-  
-  // Calculate comprehensive stats
+
   const stats = {
     total: services.length,
     active: services.filter(s => !s.unsubscribed && !s.ignored).length,
@@ -218,7 +206,6 @@ function Dashboard() {
       const now = new Date();
       const diffMs = now - date;
       const diffMins = Math.floor(diffMs / 60000);
-      
       if (diffMins < 1) return 'Just now';
       if (diffMins < 60) return `${diffMins} minutes ago`;
       if (diffMins < 1440) return `${Math.floor(diffMins / 60)} hours ago`;
@@ -232,9 +219,7 @@ function Dashboard() {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
+      transition: { staggerChildren: 0.1 }
     }
   };
 
@@ -244,32 +229,20 @@ function Dashboard() {
   };
 
   return (
-    <motion.div 
-      className="dashboard"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
+    <motion.div className="dashboard" variants={containerVariants} initial="hidden" animate="visible">
       <ToastContainer />
-      
+
       <div className="dashboard-header">
         <div className="header-content">
-          <motion.h1 
-            className="dashboard-title"
-            variants={itemVariants}
-          >
+          <motion.h1 className="dashboard-title" variants={itemVariants}>
             📧 Email Services Dashboard
           </motion.h1>
-          <motion.p 
-            className="dashboard-subtitle"
-            variants={itemVariants}
-          >
+          <motion.p className="dashboard-subtitle" variants={itemVariants}>
             AI-powered email subscription management
           </motion.p>
         </div>
-        
         <div className="header-actions">
-          <motion.button 
+          <motion.button
             className="refresh-btn"
             onClick={refreshServices}
             disabled={loading}
@@ -292,7 +265,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* Progress Bar for Scanning */}
       <AnimatePresence>
         {scanProgress > 0 && scanProgress < 100 && (
           <motion.div
@@ -301,72 +273,47 @@ function Dashboard() {
             exit={{ opacity: 0, height: 0 }}
             className="mb-6"
           >
-            <ProgressBar 
-              progress={scanProgress} 
-              label="Scanning emails..." 
-              color="blue"
-              animated={true}
-            />
-          </div>
+            <ProgressBar progress={scanProgress} label="Scanning emails..." color="blue" animated={true} />
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Enhanced Stats Cards */}
-      <motion.div 
-        className="dashboard-stats"
-        variants={itemVariants}
-      >
+      <motion.div className="dashboard-stats" variants={itemVariants}>
         <AnimatedCard className="stat-card" delay={0.1}>
-          <div className="stat-icon">
-            <BarChart3 className="w-6 h-6 text-blue-500" />
-          </div>
+          <div className="stat-icon"><BarChart3 className="w-6 h-6 text-blue-500" /></div>
           <div className="stat-number">{stats.total}</div>
           <div className="stat-label">Total Services</div>
         </AnimatedCard>
-        
+
         <AnimatedCard className="stat-card" delay={0.2}>
-          <div className="stat-icon">
-            <CheckCircle className="w-6 h-6 text-green-500" />
-          </div>
+          <div className="stat-icon"><CheckCircle className="w-6 h-6 text-green-500" /></div>
           <div className="stat-number">{stats.active}</div>
           <div className="stat-label">Active</div>
         </AnimatedCard>
-        
+
         <AnimatedCard className="stat-card" delay={0.3}>
-          <div className="stat-icon">
-            <EyeOff className="w-6 h-6 text-gray-500" />
-          </div>
+          <div className="stat-icon"><EyeOff className="w-6 h-6 text-gray-500" /></div>
           <div className="stat-number">{stats.unsubscribed}</div>
           <div className="stat-label">Unsubscribed</div>
         </AnimatedCard>
-        
+
         <AnimatedCard className="stat-card" delay={0.4}>
-          <div className="stat-icon">
-            <Eye className="w-6 h-6 text-gray-400" />
-          </div>
+          <div className="stat-icon"><Eye className="w-6 h-6 text-gray-400" /></div>
           <div className="stat-number">{stats.ignored}</div>
           <div className="stat-label">Ignored</div>
         </AnimatedCard>
-        
+
         {stats.suspicious > 0 && (
           <AnimatedCard className="stat-card suspicious" delay={0.5}>
-            <div className="stat-icon">
-              <AlertTriangle className="w-6 h-6 text-orange-500" />
-            </div>
+            <div className="stat-icon"><AlertTriangle className="w-6 h-6 text-orange-500" /></div>
             <div className="stat-number">{stats.suspicious}</div>
             <div className="stat-label">Suspicious</div>
           </AnimatedCard>
         )}
       </motion.div>
 
-      {/* AI Analysis Summary */}
       {aiAnalysis && (
-        <motion.div 
-          className="ai-analysis-summary"
-          variants={itemVariants}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div className="ai-analysis-summary" variants={itemVariants}>
           <div className="analysis-header">
             <TrendingUp className="w-5 h-5 text-blue-500" />
             <h3>AI Security Analysis</h3>
@@ -376,25 +323,17 @@ function Dashboard() {
               <span className="stat-value">{aiAnalysis.suspiciousPercentage}%</span>
               <span className="stat-desc">Suspicious Services</span>
             </div>
-            {aiAnalysis.recommendations.length > 0 && (
-              <div className="recommendations">
-                {aiAnalysis.recommendations.slice(0, 2).map((rec, index) => (
-                  <div key={index} className={`recommendation ${rec.type}`}>
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>{rec.message}</span>
-                  </div>
-                ))}
+            {aiAnalysis.recommendations.slice(0, 2).map((rec, index) => (
+              <div key={index} className={`recommendation ${rec.type}`}>
+                <AlertTriangle className="w-4 h-4" />
+                <span>{rec.message}</span>
               </div>
-            )}
+            ))}
           </div>
         </motion.div>
       )}
 
-      {/* Search and Filter Bar */}
-      <motion.div 
-        className="search-section"
-        variants={itemVariants}
-      >
+      <motion.div className="search-section" variants={itemVariants}>
         <SearchBar
           onSearch={handleSearch}
           onFilter={handleFilter}
@@ -405,11 +344,7 @@ function Dashboard() {
         />
       </motion.div>
 
-      {/* View Mode Tabs */}
-      <motion.div 
-        className="view-mode-tabs"
-        variants={itemVariants}
-      >
+      <motion.div className="view-mode-tabs" variants={itemVariants}>
         {[
           { id: 'all', label: 'All Services', count: services.length },
           { id: 'active', label: 'Active', count: stats.active },
@@ -431,79 +366,47 @@ function Dashboard() {
 
       <div className="dashboard-info">
         <p className="last-scan">
-          <strong>Last scan:</strong> {formatLastScan(lastScan)} • 
+          <strong>Last scan:</strong> {formatLastScan(lastScan)} •
           <strong> Showing:</strong> {displayServices.length} of {services.length} services
         </p>
       </div>
 
-      {/* Error Banner */}
       {error && (
-        <motion.div 
-          className="error-banner"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div className="error-banner" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
           <span>❌ {error}</span>
           <button onClick={loadSavedServices}>Retry</button>
         </motion.div>
       )}
 
-      {/* Loading Banner */}
       {loading && (
-        <motion.div 
-          className="loading-banner"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div className="loading-banner" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
           <LoadingSpinner size="md" color="primary" />
           <span>🔍 Scanning your emails for services...</span>
         </motion.div>
       )}
 
-      {/* Empty State */}
       {!loading && services.length === 0 && (
-        <motion.div 
-          className="empty-state"
-          variants={itemVariants}
-        >
+        <motion.div className="empty-state" variants={itemVariants}>
           <div className="empty-icon">📭</div>
           <h3>No Services Found</h3>
           <p>Click "Refresh Services" to scan your emails for signup services.</p>
-          <motion.button 
-            className="refresh-btn" 
-            onClick={refreshServices}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
+          <motion.button className="refresh-btn" onClick={refreshServices} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             🔍 Start Scanning
           </motion.button>
         </motion.div>
       )}
 
-      {/* Services Grid */}
       <AnimatePresence mode="wait">
         {displayServices.length > 0 && (
-          <motion.div 
-            className="services-section"
-            variants={itemVariants}
-            key={viewMode}
-          >
-            <motion.h2 
-              className="section-title"
-              variants={itemVariants}
-            >
+          <motion.div className="services-section" variants={itemVariants} key={viewMode}>
+            <motion.h2 className="section-title" variants={itemVariants}>
               {viewMode === 'all' && `📧 All Services (${displayServices.length})`}
               {viewMode === 'active' && `🔴 Active Services (${displayServices.length})`}
               {viewMode === 'managed' && `✅ Managed Services (${displayServices.length})`}
               {viewMode === 'suspicious' && `⚠️ Suspicious Services (${displayServices.length})`}
             </motion.h2>
-            
-            <motion.div 
-              className="services-grid"
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-            >
+
+            <motion.div className="services-grid" variants={containerVariants} initial="hidden" animate="visible">
               <AnimatePresence>
                 {displayServices.map((service, index) => (
                   <ServiceCard

@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const detectSignupEmails = require('../helpers/detectSignupEmails');
-const { detectNewSignupEmails } = require('../helpers/detectSignupEmails');
+const {
+  detectSignupEmails,
+  detectNewSignupEmails
+} = require('../helpers/detectSignupEmails');
 const testGmailConnection = require('../helpers/test');
 const tokenManager = require('../utils/tokenManager');
 const logger = require('../utils/logger');
@@ -14,30 +16,31 @@ const User = require('../models/User');
 // Apply rate limiting to all Gmail routes
 router.use(gmailLimiter);
 
+// GET /gmail/all-signups
 router.get('/all-signups', asyncHandler(async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: 'Not logged in' });
-  }
-
-  const forceRefresh = req.query.refresh === 'true';
-
-  if (!req.user.accessToken) {
-    return res.status(401).json({ 
-      error: 'Access token missing - please log in again',
-      action: 'REAUTH_REQUIRED'
-    });
-  }
-
   try {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: 'Not logged in' });
+    }
+
+    const forceRefresh = req.query.refresh === 'true';
+
+    if (!req.user || !req.user.accessToken) {
+      return res.status(401).json({ 
+        error: 'Access token missing - please log in again',
+        action: 'REAUTH_REQUIRED'
+      });
+    }
+
     logger.info('Detecting signup services', { 
-      userId: req.user.id,
-      forceRefresh 
+      userId: req.user.id || req.user._id,
+      forceRefresh,
+      email: req.user.email
     });
 
     const results = await detectSignupEmails(req.user, forceRefresh);
 
-    // Save to user's profile
-    if (results.length > 0) {
+    if (Array.isArray(results) && results.length > 0) {
       await User.findOneAndUpdate(
         { googleId: req.user.id },
         { 
@@ -55,10 +58,12 @@ router.get('/all-signups', asyncHandler(async (req, res) => {
       lastScan: new Date().toISOString(),
       status: 'success'
     });
+
   } catch (err) {
+    console.error('FULL ERROR STACK:', err);
     logger.error('Error fetching signup emails', {
-      userId: req.user.id,
-      error: err.message
+      userId: req.user?.id,
+      error: err.stack || err.message
     });
     res.status(500).json({ 
       error: 'Failed to fetch signup emails',
@@ -67,7 +72,7 @@ router.get('/all-signups', asyncHandler(async (req, res) => {
   }
 }));
 
-// Get saved services from database
+// GET /gmail/saved-services
 router.get('/saved-services', validatePagination, asyncHandler(async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
@@ -77,7 +82,6 @@ router.get('/saved-services', validatePagination, asyncHandler(async (req, res) 
     const user = await User.findOne({ googleId: req.user.id });
     const services = user?.signupServices || [];
     
-    // Apply pagination if requested
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
     const startIndex = (page - 1) * limit;
@@ -94,20 +98,20 @@ router.get('/saved-services', validatePagination, asyncHandler(async (req, res) 
     });
   } catch (err) {
     logger.error('Error fetching saved services', {
-      userId: req.user.id,
+      userId: req.user?.id,
       error: err.message
     });
     res.status(500).json({ error: 'Failed to fetch saved services' });
   }
 }));
 
-// Update service status (unsubscribe/ignore)
+// POST /gmail/update-service
 router.post('/update-service', validateUpdateService, asyncHandler(async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
 
-  const { domain, action } = req.body; // action: 'unsubscribe' or 'ignore'
+  const { domain, action } = req.body;
 
   try {
     const user = await User.findOne({ googleId: req.user.id });
@@ -121,7 +125,7 @@ router.post('/update-service', validateUpdateService, asyncHandler(async (req, r
     }
 
     const service = user.signupServices[serviceIndex];
-    
+
     switch (action) {
       case 'unsubscribe':
         service.unsubscribed = true;
@@ -137,26 +141,26 @@ router.post('/update-service', validateUpdateService, asyncHandler(async (req, r
         service.unsubscribedAt = null;
         service.ignoredAt = null;
         break;
+      default:
+        return res.status(400).json({ error: 'Invalid action' });
     }
 
     await user.save();
-    
-    // Clear user cache to force refresh
     clearUserCache(req.user.id);
-    
+
     logger.info(`Service ${action}d successfully`, {
       userId: req.user.id,
       domain,
       action
     });
-    
+
     res.json({
       message: `Service ${action}d successfully`,
       status: 'success'
     });
   } catch (err) {
     logger.error('Error updating service', {
-      userId: req.user.id,
+      userId: req.user?.id,
       domain,
       action,
       error: err.message
@@ -165,7 +169,7 @@ router.post('/update-service', validateUpdateService, asyncHandler(async (req, r
   }
 }));
 
-// Get new services since last scan
+// GET /gmail/new-services
 router.get('/new-services', asyncHandler(async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
@@ -174,7 +178,7 @@ router.get('/new-services', asyncHandler(async (req, res) => {
   try {
     const user = await User.findOne({ googleId: req.user.id });
     const lastScan = user?.lastScan;
-    
+
     if (!lastScan) {
       return res.json({
         services: [],
@@ -184,7 +188,7 @@ router.get('/new-services', asyncHandler(async (req, res) => {
     }
 
     const newServices = await detectNewSignupEmails(req.user, lastScan);
-    
+
     res.json({
       services: newServices,
       count: newServices.length,
@@ -193,19 +197,20 @@ router.get('/new-services', asyncHandler(async (req, res) => {
     });
   } catch (err) {
     logger.error('Error fetching new services', {
-      userId: req.user.id,
+      userId: req.user?.id,
       error: err.message
     });
     res.status(500).json({ error: 'Failed to fetch new services' });
   }
 }));
 
+// GET /gmail/test-connection
 router.get('/test-connection', asyncHandler(async (req, res) => {
   logger.debug('Gmail connection test requested', {
     userId: req.user?.id,
     hasAccessToken: !!req.user?.accessToken
   });
-  
+
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -218,24 +223,33 @@ router.get('/test-connection', asyncHandler(async (req, res) => {
   }
 
   try {
-    // Validate and refresh token if needed
     const tokens = await tokenManager.validateAndRefreshToken(req.user);
-    
     const result = await testGmailConnection(tokens);
 
     logger.info('Gmail connection test successful', {
       userId: req.user.id,
       email: result.email
     });
-    
+
     res.json(result);
   } catch (err) {
     logger.error('Gmail connection test failed', {
-      userId: req.user.id,
+      userId: req.user?.id,
       error: err.message
     });
     res.status(400).json({ error: err.message });
   }
 }));
+
+router.get('/whoami', (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+
+  res.json({
+    id: req.user?.id,
+    email: req.user?.email,
+    accessTokenExists: !!req.user?.accessToken,
+    refreshTokenExists: !!req.user?.refreshToken
+  });
+});
 
 module.exports = router;

@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema({
     suspicious: { type: Boolean, default: false },
     unsubscribed: { type: Boolean, default: false },
     unsubscribedAt: Date,
-    ignored: { type: Boolean, default: false }
+    ignored: { type: Boolean, default: false },
     ignoredAt: Date,
     isNew: { type: Boolean, default: false }
   }],

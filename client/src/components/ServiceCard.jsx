@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, Calendar, Globe, Mail, MoreVertical, Shield, Trash2, EyeOff, Undo2 } from 'lucide-react';
+import { AlertTriangle, Calendar, Globe, MoreVertical, Trash2, EyeOff, Undo2, Shield } from 'lucide-react';
 import { showToast } from './ui/Toast';
 import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector';
 import './ServiceCard.css';
@@ -18,49 +18,35 @@ function ServiceCard({
   onIgnore 
 }) {
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState({
-    unsubscribed,
-    ignored
-  });
   const [showActions, setShowActions] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suspiciousAnalysis, setSuspiciousAnalysis] = useState(null);
+  const [status, setStatus] = useState({ unsubscribed, ignored });
 
-  // Analyze service for suspicious patterns on mount
-  React.useEffect(() => {
-    if (!suspiciousAnalysis && !isAnalyzing) {
-      setIsAnalyzing(true);
-      const analysis = suspiciousEmailDetector.analyzeService({
-        platform,
-        email,
-        domain,
-        subject,
-        date
-      });
-      setSuspiciousAnalysis(analysis);
-      setIsAnalyzing(false);
-    }
-  }, [platform, email, domain, subject, date, suspiciousAnalysis, isAnalyzing]);
+  useEffect(() => {
+    const analysis = suspiciousEmailDetector.analyzeService({ platform, email, domain, subject, date });
+    setSuspiciousAnalysis(analysis);
+  }, [platform, email, domain, subject, date]);
 
   const handleAction = async (action) => {
     setIsLoading(true);
     try {
-      const actionPromise = action === 'unsubscribe' ? onUnsubscribe(domain) : onIgnore(domain);
-      
-      showToast.promise(actionPromise, {
+      const actionFn = action === 'unsubscribe' ? onUnsubscribe : onIgnore;
+      const promise = actionFn(domain);
+
+      showToast.promise(promise, {
         loading: `${action === 'unsubscribe' ? 'Unsubscribing from' : 'Ignoring'} ${platform}...`,
-        success: `✅ ${platform} ${action === 'unsubscribe' ? 'unsubscribed' : 'ignored'} successfully`,
+        success: `✅ ${platform} ${action}ed successfully`,
         error: `❌ Failed to ${action} ${platform}`
       });
-      
-      await actionPromise;
+
+      await promise;
       setStatus(prev => ({
         ...prev,
         [action === 'unsubscribe' ? 'unsubscribed' : 'ignored']: true
       }));
       setShowActions(false);
-    } catch (error) {
-      console.error(`Failed to ${action}:`, error);
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -69,26 +55,20 @@ function ServiceCard({
   const handleRestore = async () => {
     setIsLoading(true);
     try {
-      const restorePromise = onUnsubscribe ? onUnsubscribe(domain, 'restore') : Promise.resolve();
-      
+      const restorePromise = onUnsubscribe(domain, 'restore');
       showToast.promise(restorePromise, {
         loading: `Restoring ${platform}...`,
-        success: `✅ ${platform} restored successfully`,
-        error: `❌ Failed to restore ${platform}`
+        success: `✅ ${platform} restored`,
+        error: `❌ Restore failed`
       });
-      
       await restorePromise;
       setStatus({ unsubscribed: false, ignored: false });
       setShowActions(false);
-    } catch (error) {
-      console.error('Failed to restore:', error);
+    } catch (err) {
+      console.error('Restore failed:', err);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const getFaviconUrl = (domain) => {
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
   };
 
   const getStatusColor = () => {
@@ -98,47 +78,28 @@ function ServiceCard({
     return 'active';
   };
 
-  const getSuspiciousLevel = () => {
+  const suspiciousLevel = (() => {
     if (!suspiciousAnalysis) return null;
-    
-    const { score, category } = suspiciousAnalysis;
-    
+    const { score } = suspiciousAnalysis;
     if (score < 0.3) return { level: 'safe', color: 'green', icon: Shield };
     if (score < 0.6) return { level: 'questionable', color: 'yellow', icon: AlertTriangle };
     if (score < 0.8) return { level: 'suspicious', color: 'orange', icon: AlertTriangle };
     return { level: 'dangerous', color: 'red', icon: AlertTriangle };
-  };
+  })();
 
-  const formatDate = (dateString) => {
+  const formatDate = (d) => {
     try {
-      return new Date(dateString).toLocaleDateString();
+      return new Date(d).toLocaleDateString();
     } catch {
-      return 'Unknown date';
+      return 'Unknown';
     }
   };
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20, scale: 0.95 },
-    visible: { 
-      opacity: 1, 
-      y: 0, 
-      scale: 1,
-      transition: {
-        duration: 0.4,
-        ease: [0.25, 0.46, 0.45, 0.94]
-      }
-    },
-    hover: {
-      y: -8,
-      scale: 1.02,
-      transition: {
-        duration: 0.2,
-        ease: "easeOut"
-      }
-    }
+    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3 } },
+    hover: { y: -6, scale: 1.02 }
   };
-
-  const suspiciousLevel = getSuspiciousLevel();
 
   return (
     <motion.div 
@@ -151,92 +112,66 @@ function ServiceCard({
     >
       <div className="service-header">
         <div className="service-info">
-          <motion.div
-            whileHover={{ scale: 1.1, rotate: 5 }}
+         <motion.img 
+            src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} 
+            alt={`${platform} favicon`} 
+            className="service-favicon"
+            onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = '/logo192.png'; 
+             }}
+            whileHover={{ rotate: 5, scale: 1.1 }}
             transition={{ duration: 0.2 }}
-          >
-            <img 
-              src={getFaviconUrl(domain)} 
-              alt={`${platform} favicon`}
-              className="service-favicon"
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
-          </motion.div>
+          />
+
           <div className="service-details">
             <h3 className="service-platform">{platform}</h3>
             <p className="service-email">{email}</p>
           </div>
         </div>
-        
+
         <div className="service-status">
-          {/* AI Suspicious Analysis Badge */}
           {suspiciousLevel && suspiciousLevel.level !== 'safe' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`status-badge ${suspiciousLevel.level}`}
-              title={`Suspicious score: ${Math.round((suspiciousAnalysis?.score || 0) * 100)}%`}
-            >
+            <span className={`status-badge ${suspiciousLevel.level}`}>
               <suspiciousLevel.icon className="w-3 h-3 mr-1" />
               {suspiciousLevel.level}
-            </motion.div>
+            </span>
           )}
-          
-          {/* Status Badges */}
           {status.unsubscribed && <span className="status-badge unsubscribed">✅ Unsubscribed</span>}
           {status.ignored && <span className="status-badge ignored">👁️ Ignored</span>}
-          
-          {/* Actions Menu */}
+
           <div className="relative">
             <motion.button
               onClick={() => setShowActions(!showActions)}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="action-toggle"
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
             >
               <MoreVertical className="w-4 h-4" />
             </motion.button>
-            
+
             <AnimatePresence>
               {showActions && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50"
+                  className="action-menu"
                 >
-                  <div className="py-2">
+                  <div className="menu-list">
                     {!status.unsubscribed && !status.ignored && (
                       <>
-                        <button
-                          onClick={() => handleAction('unsubscribe')}
-                          disabled={isLoading}
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Unsubscribe
+                        <button onClick={() => handleAction('unsubscribe')} disabled={isLoading}>
+                          <Trash2 className="w-4 h-4" /> Unsubscribe
                         </button>
-                        <button
-                          onClick={() => handleAction('ignore')}
-                          disabled={isLoading}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <EyeOff className="w-4 h-4" />
-                          Ignore
+                        <button onClick={() => handleAction('ignore')} disabled={isLoading}>
+                          <EyeOff className="w-4 h-4" /> Ignore
                         </button>
                       </>
                     )}
-                    
                     {(status.unsubscribed || status.ignored) && (
-                      <button
-                        onClick={handleRestore}
-                        disabled={isLoading}
-                        className="w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2"
-                      >
-                        <Undo2 className="w-4 h-4" />
-                        Restore
+                      <button onClick={handleRestore} disabled={isLoading}>
+                        <Undo2 className="w-4 h-4" /> Restore
                       </button>
                     )}
                   </div>
@@ -247,106 +182,61 @@ function ServiceCard({
         </div>
       </div>
 
-      {/* AI Analysis Details */}
-      {suspiciousAnalysis && suspiciousAnalysis.reasons.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="suspicious-analysis"
-        >
+      {suspiciousAnalysis?.reasons.length > 0 && (
+        <div className="suspicious-analysis">
           <div className="analysis-header">
             <AlertTriangle className="w-4 h-4 text-orange-500" />
-            <span className="text-sm font-medium text-gray-700">
-              AI Analysis ({Math.round((suspiciousAnalysis.score || 0) * 100)}% suspicious)
+            <span>
+              AI flagged this as {Math.round(suspiciousAnalysis.score * 100)}% suspicious
             </span>
           </div>
-          <div className="analysis-reasons">
-            {suspiciousAnalysis.reasons.slice(0, 2).map((reason, index) => (
-              <div key={index} className="reason-item">
-                <span className="text-xs text-gray-600">{reason}</span>
-              </div>
+          <ul className="analysis-reasons">
+            {suspiciousAnalysis.reasons.slice(0, 2).map((r, i) => (
+              <li key={i}>{r}</li>
             ))}
-          </div>
-        </motion.div>
+          </ul>
+        </div>
       )}
 
       {subject && (
         <div className="service-subject">
-          <p title={subject}>
-            <strong>Last email:</strong> {subject.length > 60 ? `${subject.substring(0, 60)}...` : subject}
-          </p>
+          <p title={subject}><strong>Last email:</strong> {subject.length > 60 ? subject.slice(0, 60) + '...' : subject}</p>
         </div>
       )}
 
       <div className="service-meta">
-        <motion.span 
-          className="service-date"
-          whileHover={{ scale: 1.05 }}
-        >
-          <Calendar className="w-3 h-3 mr-1" />
-          {formatDate(date)}
-        </motion.span>
-        <motion.span 
-          className="service-domain"
-          whileHover={{ scale: 1.05 }}
-        >
-          <Globe className="w-3 h-3 mr-1" />
-          {domain}
-        </motion.span>
+        <span><Calendar className="w-3 h-3" /> {formatDate(date)}</span>
+        <span><Globe className="w-3 h-3" /> {domain}</span>
       </div>
 
-      {/* Quick Action Buttons */}
+      {/* Quick Buttons */}
       <AnimatePresence>
         {!status.unsubscribed && !status.ignored && (
           <motion.div
+            className="service-actions"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="service-actions"
           >
-            <motion.button
-              className="action-btn unsubscribe-btn"
-              onClick={() => handleAction('unsubscribe')}
-              disabled={isLoading}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Trash2 className="w-4 h-4" />
-              {isLoading ? 'Processing...' : 'Unsubscribe'}
-            </motion.button>
-            <motion.button
-              className="action-btn ignore-btn"
-              onClick={() => handleAction('ignore')}
-              disabled={isLoading}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <EyeOff className="w-4 h-4" />
-              {isLoading ? 'Processing...' : 'Ignore'}
-            </motion.button>
+            <button onClick={() => handleAction('unsubscribe')} disabled={isLoading}>
+              <Trash2 className="w-4 h-4" /> {isLoading ? 'Processing...' : 'Unsubscribe'}
+            </button>
+            <button onClick={() => handleAction('ignore')} disabled={isLoading}>
+              <EyeOff className="w-4 h-4" /> {isLoading ? 'Processing...' : 'Ignore'}
+            </button>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* Managed Service Actions */}
-      <AnimatePresence>
         {(status.unsubscribed || status.ignored) && (
           <motion.div
+            className="service-actions"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="service-actions"
           >
-            <motion.button
-              className="action-btn restore-btn"
-              onClick={handleRestore}
-              disabled={isLoading}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Undo2 className="w-4 h-4" />
-              {isLoading ? 'Restoring...' : 'Restore Service'}
-            </motion.button>
+            <button onClick={handleRestore} disabled={isLoading}>
+              <Undo2 className="w-4 h-4" /> {isLoading ? 'Restoring...' : 'Restore'}
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

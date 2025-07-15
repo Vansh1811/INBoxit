@@ -283,3 +283,8 @@ async function detectNewSignupEmails(user, lastScanDate) {
     throw error;
   }
 }
+module.exports = {
+  detectSignupEmails,
+  detectNewSignupEmails
+};
+

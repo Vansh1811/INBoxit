@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -30,34 +30,7 @@ function App() {
     localStorage.setItem('darkMode', JSON.stringify(darkMode));
   }, [darkMode]);
 
-  useEffect(() => {
-    checkLoginStatus();
-  }, []);
-
-  const appVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: {
-        duration: 0.5,
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const contentVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: {
-        duration: 0.4,
-        ease: [0.25, 0.46, 0.45, 0.94]
-      }
-    }
-  };
-
-  const checkLoginStatus = async () => {
+  const checkLoginStatus = useCallback(async () => {
     try {
       const data = await apiService.checkLoginStatus();
       const userObj = {
@@ -73,7 +46,11 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkLoginStatus();
+  }, [checkLoginStatus]);
 
   const testGmailConnection = async () => {
     try {
@@ -81,7 +58,7 @@ function App() {
       setStatus({
         status: 'success',
         services: data.services || [],
-        message: data.message
+        message: data.message,
       });
     } catch (err) {
       setStatus({
@@ -95,12 +72,12 @@ function App() {
 
   if (isLoading) {
     return (
-      <motion.div 
+      <motion.div
         className={`app ${darkMode ? 'dark-mode' : ''}`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       >
-        <LoadingSpinner 
+        <LoadingSpinner
           fullScreen={true}
           size="xl"
           text="Loading InboxIt..."
@@ -110,20 +87,43 @@ function App() {
     );
   }
 
+  const appVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        duration: 0.5,
+        staggerChildren: 0.1,
+      },
+    },
+  };
+
+  const contentVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.4,
+        ease: [0.25, 0.46, 0.45, 0.94],
+      },
+    },
+  };
+
   return (
     <ErrorBoundary>
-      <motion.div 
+      <motion.div
         className={`app ${darkMode ? 'dark-mode' : ''}`}
         variants={appVariants}
         initial="hidden"
         animate="visible"
       >
         <ToastContainer />
-        
+
         <motion.div variants={contentVariants}>
           <Header user={user} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
         </motion.div>
-        
+
         <AnimatePresence mode="wait">
           {!user ? (
             <motion.div
