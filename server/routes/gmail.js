@@ -1,23 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const {
-  detectSignupEmails,
-  detectNewSignupEmails
-} = require('../helpers/detectSignupEmails');
+const { detectSignupEmails, detectNewSignupEmails } = require('../helpers/detectSignupEmails');
 const testGmailConnection = require('../helpers/test');
 const tokenManager = require('../utils/tokenManager');
 const logger = require('../utils/logger');
 const { clearUserCache } = require('../utils/cache');
-const { gmailLimiter } = require('../middleware/rateLimiter');
-const { validateUpdateService, validatePagination } = require('../middleware/validation');
-const { asyncHandler } = require('../middleware/errorHandler');
 const User = require('../models/User');
 
-// Apply rate limiting to all Gmail routes
-router.use(gmailLimiter);
+// Simple async handler for now
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 
-// GET /gmail/all-signups
-router.get('/all-signups', asyncHandler(async (req, res) => {
+router.get('/all-signups', async (req, res) => {
+  try {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'Not logged in' });
+  }
+
+  const forceRefresh = req.query.refresh === 'true';
+
+  if (!req.user.accessToken) {
+    return res.status(401).json({ 
+      error: 'Access token missing - please log in again',
+      action: 'REAUTH_REQUIRED'
+    });
+  }
+
   try {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: 'Not logged in' });
@@ -38,7 +47,16 @@ router.get('/all-signups', asyncHandler(async (req, res) => {
       email: req.user.email
     });
 
-    const results = await detectSignupEmails(req.user, forceRefresh);
+    // Enhanced progress tracking
+    const progressCallback = (progress) => {
+      // In a real app, you might use WebSockets to send real-time progress
+      logger.info('Scan progress', {
+        userId: req.user.id,
+        ...progress
+      });
+    };
+
+    const results = await detectSignupEmails(req.user, forceRefresh, progressCallback);
 
     if (Array.isArray(results) && results.length > 0) {
       await User.findOneAndUpdate(
@@ -56,6 +74,11 @@ router.get('/all-signups', asyncHandler(async (req, res) => {
       services: results,
       count: results.length,
       lastScan: new Date().toISOString(),
+      scanStats: {
+        totalFound: results.length,
+        suspicious: results.filter(s => s.suspicious).length,
+        domains: [...new Set(results.map(s => s.domain))].length
+      },
       status: 'success'
     });
 
@@ -70,10 +93,18 @@ router.get('/all-signups', asyncHandler(async (req, res) => {
       details: err.message 
     });
   }
-}));
+  } catch (err) {
+    console.error('Gmail route error:', err);
+    res.status(500).json({ 
+      error: 'Failed to fetch signup emails',
+      details: err.message 
+    });
+  }
+});
 
-// GET /gmail/saved-services
-router.get('/saved-services', validatePagination, asyncHandler(async (req, res) => {
+// Get saved services from database
+router.get('/saved-services', async (req, res) => {
+  try {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -103,10 +134,15 @@ router.get('/saved-services', validatePagination, asyncHandler(async (req, res) 
     });
     res.status(500).json({ error: 'Failed to fetch saved services' });
   }
-}));
+  } catch (err) {
+    console.error('Saved services error:', err);
+    res.status(500).json({ error: 'Failed to fetch saved services' });
+  }
+});
 
-// POST /gmail/update-service
-router.post('/update-service', validateUpdateService, asyncHandler(async (req, res) => {
+// Update service status (unsubscribe/ignore)
+router.post('/update-service', async (req, res) => {
+  try {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -146,8 +182,10 @@ router.post('/update-service', validateUpdateService, asyncHandler(async (req, r
     }
 
     await user.save();
-    clearUserCache(req.user.id);
-
+    
+    // Clear user cache to force refresh
+    // clearUserCache(req.user.id);
+    
     logger.info(`Service ${action}d successfully`, {
       userId: req.user.id,
       domain,
@@ -167,10 +205,15 @@ router.post('/update-service', validateUpdateService, asyncHandler(async (req, r
     });
     res.status(500).json({ error: 'Failed to update service' });
   }
-}));
+  } catch (err) {
+    console.error('Update service error:', err);
+    res.status(500).json({ error: 'Failed to update service' });
+  }
+});
 
-// GET /gmail/new-services
-router.get('/new-services', asyncHandler(async (req, res) => {
+// Get new services since last scan
+router.get('/new-services', async (req, res) => {
+  try {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ message: 'Not logged in' });
   }
@@ -202,10 +245,14 @@ router.get('/new-services', asyncHandler(async (req, res) => {
     });
     res.status(500).json({ error: 'Failed to fetch new services' });
   }
-}));
+  } catch (err) {
+    console.error('New services error:', err);
+    res.status(500).json({ error: 'Failed to fetch new services' });
+  }
+});
 
-// GET /gmail/test-connection
-router.get('/test-connection', asyncHandler(async (req, res) => {
+router.get('/test-connection', async (req, res) => {
+  try {
   logger.debug('Gmail connection test requested', {
     userId: req.user?.id,
     hasAccessToken: !!req.user?.accessToken
@@ -239,7 +286,11 @@ router.get('/test-connection', asyncHandler(async (req, res) => {
     });
     res.status(400).json({ error: err.message });
   }
-}));
+  } catch (err) {
+    console.error('Test connection error:', err);
+    res.status(500).json({ error: 'Failed to test connection' });
+  }
+});
 
 router.get('/whoami', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });

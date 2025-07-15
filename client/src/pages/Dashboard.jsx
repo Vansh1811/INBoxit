@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Eye, EyeOff } from 'lucide-react';
@@ -433,3 +434,6 @@ function Dashboard() {
 }
 
 export default Dashboard;
+=======
+{"code":"rate-limited","message":"You have hit the rate limit. Please upgrade to keep chatting.","providerLimitHit":false,"isRetryable":true}
+>>>>>>> 2a63b5ef8fb2e0fba5897b9255366c028fd10bf4

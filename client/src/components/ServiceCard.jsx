@@ -71,6 +71,11 @@ function ServiceCard({
     }
   };
 
+  const getFaviconUrl = (domain) => {
+    // Use DuckDuckGo favicon API for better reliability
+    return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+  };
+
   const getStatusColor = () => {
     if (status.unsubscribed) return 'unsubscribed';
     if (status.ignored) return 'ignored';

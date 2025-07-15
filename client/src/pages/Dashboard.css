@@ -9,15 +9,49 @@
 
 .dashboard-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 1.5rem;
   margin-bottom: 32px;
-  gap: 20px;
   padding: 24px;
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   border-radius: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(10px);
+}
+
+.icon-button {
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.icon-button:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #3b82f6;
+  transform: translateY(-1px);
+}
+
+.icon-button.logout:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* Header Content */
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
 }
 
 .header-content {
@@ -41,6 +75,48 @@
   color: #718096;
   margin: 0;
   font-weight: 400;
+}
+
+/* User Controls */
+.user-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 0.9rem;
+}
+
+.user-email {
+  font-size: 0.8rem;
+  color: #718096;
 }
 
 .header-actions {
@@ -223,6 +299,71 @@
 }
 
 /* View Mode Tabs */
+/* Pagination Controls */
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-mode-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 12px;
+}
+
+.mode-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
+  color: #3b82f6;
+}
+
+.mode-btn.active {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.results-info {
+  font-size: 14px;
+  color: #718096;
+  font-weight: 500;
+}
+
+/* Pagination Wrapper */
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 3rem;
+  padding: 2rem 0;
+}
+
+.dashboard-pagination {
+  background: rgba(255, 255, 255, 0.8);
+  padding: 1rem 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+/* Infinite Scroll */
+.infinite-scroll-container {
+  min-height: 400px;
+}
+
 .view-mode-tabs {
   display: flex;
   gap: 8px;
@@ -393,6 +534,10 @@
 }
 
 /* Dark mode support */
+.app.dark-mode .user-controls {
+  border-bottom-color: #4a5568;
+}
+
 .app.dark-mode .dashboard-title {
   color: #f7fafc;
   background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
@@ -408,6 +553,26 @@
 .app.dark-mode .dashboard-header {
   background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
   border: 1px solid #4a5568;
+}
+
+.app.dark-mode .user-name {
+  color: #e2e8f0;
+}
+
+.app.dark-mode .user-email {
+  color: #a0aec0;
+}
+
+.app.dark-mode .icon-button {
+  background: rgba(45, 55, 72, 0.8);
+  border-color: #4a5568;
+  color: #a0aec0;
+}
+
+.app.dark-mode .icon-button:hover {
+  background: rgba(99, 179, 237, 0.2);
+  border-color: #63b3ed;
+  color: #63b3ed;
 }
 
 .app.dark-mode .stat-card {
@@ -432,6 +597,24 @@
 
 .app.dark-mode .view-mode-tabs {
   background: rgba(45, 55, 72, 0.8);
+}
+
+.app.dark-mode .pagination-controls {
+  background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+  border: 1px solid #4a5568;
+}
+
+.app.dark-mode .pagination-mode-toggle {
+  background: rgba(99, 179, 237, 0.2);
+}
+
+.app.dark-mode .results-info {
+  color: #a0aec0;
+}
+
+.app.dark-mode .dashboard-pagination {
+  background: rgba(45, 55, 72, 0.8);
+  border: 1px solid #4a5568;
 }
 
 .app.dark-mode .view-tab {
@@ -481,10 +664,19 @@
   }
   
   .dashboard-header {
-    flex-direction: column;
-    align-items: stretch;
     gap: 16px;
     padding: 20px;
+  }
+  
+  .user-controls {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    gap: 1rem;
   }
   
   .dashboard-title {
@@ -512,6 +704,16 @@
   .view-mode-tabs {
     flex-wrap: wrap;
     gap: 4px;
+  }
+  
+  .pagination-controls {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+  
+  .pagination-mode-toggle {
+    align-self: center;
   }
   
   .view-tab {

@@ -7,9 +7,9 @@ const gmailRoutes = require('./routes/gmail');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const servicesRoutes = require('./routes/services');
-const { detectPlatforms, DetectedService } = require('./models/DetectedService');
-const { apiLimiter } = require('./middleware/rateLimiter');
-const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+// const { detectPlatforms, DetectedService } = require('./models/DetectedService');
+// const { apiLimiter } = require('./middleware/rateLimiter');
+// const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
 require('dotenv').config();
 
@@ -22,8 +22,8 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
-app.use('/api', apiLimiter);
+// Apply rate limiting - commented out for now
+// app.use('/api', apiLimiter);
 
 // --- MONGOOSE CONNECTION ---
 mongoose.connect(process.env.MONGO_URI, {
@@ -69,47 +69,10 @@ app.use('/auth', authRoutes);
 app.use('/gmail', gmailRoutes);
 app.use('/', servicesRoutes);
 
-// --- DETECT PLATFORMS ---
-app.get('/detect-platforms', async (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: 'Please login first' });
-
-    logger.info('Starting platform detection', { userId: req.user.id });
-
-    const platforms = await detectPlatforms(req.user);
-    const savedPlatforms = await DetectedService.find({ user: req.user._id });
-
-    res.json({
-      detected: platforms,
-      saved: savedPlatforms,
-      count: savedPlatforms.length,
-      status: 'success'
-    });
-  } catch (error) {
-    logger.error('Platform detection failed', {
-      userId: req.user?.id,
-      error: error.message
-    });
-    res.status(500).json({ error: 'Failed to detect platforms' });
-  }
-});
-
-// --- FETCH SAVED PLATFORMS ---
-app.get('/my-platforms', async (req, res) => {
-  try {
-    if (!req.user) return res.status(401).json({ error: 'Please login first' });
-
-    const platforms = await DetectedService.find({ user: req.user._id });
-
-    res.json({
-      platforms,
-      count: platforms.length,
-      status: 'success'
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch platforms' });
-  }
-});
+// Commented out platform detection for now
+// app.get('/detect-platforms', async (req, res) => {
+//   // ... platform detection code
+// });
 
 // --- GMAIL CONNECTION TEST ---
 app.get('/test-connection', async (req, res) => {
@@ -132,9 +95,11 @@ app.get('/test-connection', async (req, res) => {
   }
 });
 
-// --- ERROR HANDLING ---
-app.use(notFoundHandler);
-app.use(errorHandler);
+// Add basic error handling
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // --- GRACEFUL SHUTDOWN ---
 process.on('SIGTERM', () => {
