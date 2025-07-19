@@ -6,7 +6,7 @@ import UserSection from '../components/UserSection';
 import ServiceList from '../components/ServiceList'; // new wrapper to map ServiceCard
 import '../App.css';
 
-function Home() {
+function Home() { 
   const [user, setUser] = useState(null);
   const [services, setServices] = useState([]);
   const [error, setError] = useState('');
