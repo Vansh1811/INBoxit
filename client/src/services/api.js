@@ -4,7 +4,7 @@ const API_BASE_URL = window.location.protocol === 'https:'
   : 'http://localhost:5000';
 
 class ApiService {
-  constructor() {
+  constructor() {  
     this.baseURL = API_BASE_URL;
     this.requestQueue = [];
     this.isProcessingQueue = false;
