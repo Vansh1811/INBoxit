@@ -8,7 +8,7 @@ import '../App.css';
 
 function Home() { 
   const [user, setUser] = useState(null);
-  const [services, setServices] = useState([]);
+  const [services, setServices] = useState([]); 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('checking');
