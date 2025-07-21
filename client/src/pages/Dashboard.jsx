@@ -11,7 +11,7 @@ import { ToastContainer, showToast } from '../components/ui/Toast';
 import { useSearch } from '../hooks/useSearch';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector'; 
-import apiService from '../services/api';
+import apiService from '../services/api'; 
 import './Dashboard.css';
 
 function Dashboard() {
