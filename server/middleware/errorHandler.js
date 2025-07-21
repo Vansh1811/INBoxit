@@ -7,7 +7,7 @@ const errorHandler = (err, req, res, next) => {
     message: err.message,
     stack: err.stack,
     url: req.url,
-    method: req.method,
+    method: req.method, 
     ip: req.ip,
     userAgent: req.get('User-Agent'),
     userId: req.user?.id
