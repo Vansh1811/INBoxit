@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import ServiceCard from '../components/ServiceCard';
 import SearchBar from '../components/ui/SearchBar';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import LoadingSpinner from '../components/ui/LoadingSpinner'; 
 import ProgressBar from '../components/ui/ProgressBar';
 import AnimatedCard from '../components/ui/AnimatedCard'; 
 import { ToastContainer, showToast } from '../components/ui/Toast';
