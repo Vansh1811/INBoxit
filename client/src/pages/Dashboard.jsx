@@ -12,7 +12,7 @@ import { useSearch } from '../hooks/useSearch';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector'; 
 import apiService from '../services/api'; 
-import './Dashboard.css';
+import './Dashboard.css'; 
 
 function Dashboard() {
   const [services, setServices] = useState([]);
