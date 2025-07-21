@@ -10,7 +10,7 @@ import AnimatedCard from '../components/ui/AnimatedCard';
 import { ToastContainer, showToast } from '../components/ui/Toast';
 import { useSearch } from '../hooks/useSearch';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector';
+import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector'; 
 import apiService from '../services/api';
 import './Dashboard.css';
 
