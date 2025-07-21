@@ -8,7 +8,7 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ProgressBar from '../components/ui/ProgressBar';
 import AnimatedCard from '../components/ui/AnimatedCard'; 
 import { ToastContainer, showToast } from '../components/ui/Toast';
-import { useSearch } from '../hooks/useSearch';
+import { useSearch } from '../hooks/useSearch'; 
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector'; 
 import apiService from '../services/api'; 
