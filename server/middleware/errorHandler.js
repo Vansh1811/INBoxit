@@ -4,7 +4,7 @@ const logger = require('../utils/logger');
 const errorHandler = (err, req, res, next) => {
   // Log error details
   logger.error('Error occurred:', {
-    message: err.message,
+    message: err.message, 
     stack: err.stack,
     url: req.url,
     method: req.method, 
