@@ -11,7 +11,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
+ 
 // Strict rate limiting for Gmail API endpoints
 const gmailLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
