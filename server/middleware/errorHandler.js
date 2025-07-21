@@ -15,7 +15,7 @@ const errorHandler = (err, req, res, next) => {
 
   // Handle specific error types
   if (err.name === 'ValidationError') {
-    return res.status(400).json({
+    return res.status(400).json({ 
       error: 'Validation Error',
       details: Object.values(err.errors).map(e => e.message)
     });
