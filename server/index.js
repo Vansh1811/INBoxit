@@ -7,9 +7,7 @@ const gmailRoutes = require('./routes/gmail');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const servicesRoutes = require('./routes/services');
-// const { detectPlatforms, DetectedService } = require('./models/DetectedService'); 
-// const { apiLimiter } = require('./middleware/rateLimiter');
-// const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');  
+ 
 const logger = require('./utils/logger'); 
 require('dotenv').config(); 
   
