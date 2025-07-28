@@ -11,7 +11,7 @@ const servicesRoutes = require('./routes/services');
 // const { apiLimiter } = require('./middleware/rateLimiter');
 // const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');  
 const logger = require('./utils/logger'); 
-require('dotenv').config();
+require('dotenv').config(); 
 
 const app = express();
 app.set('trust proxy', 1); // For rate limiting
