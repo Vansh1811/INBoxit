@@ -7,7 +7,7 @@ const DetectedServiceSchema = new mongoose.Schema({
     ref: 'User', 
     required: true,  
   },  
-  platform: String, 
+  platform: String,  
   sender: String, 
   date: String,
 });
