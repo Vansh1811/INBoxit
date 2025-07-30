@@ -8,7 +8,7 @@ const DetectedServiceSchema = new mongoose.Schema({
     required: true,  
   },  
   platform: String,  
-  sender: String, 
+  sender: String,  
   date: String,
 });
 
