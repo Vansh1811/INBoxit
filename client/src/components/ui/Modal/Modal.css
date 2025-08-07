@@ -1,0 +1,261 @@
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+/* Modal Container */
+.modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  position: relative;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .modal {
+    background: #1f2937;
+    color: #f3f4f6;
+  }
+}
+
+/* Modal Sizes */
+.modal-small {
+  max-width: 400px;
+}
+
+.modal-medium {
+  max-width: 600px;
+}
+
+.modal-large {
+  max-width: 900px;
+}
+
+.modal-full {
+  max-width: 95%;
+  height: 90vh;
+}
+
+/* Modal Types */
+.modal-danger .modal-header {
+  color: #dc2626;
+}
+
+.modal-warning .modal-header {
+  color: #f59e0b;
+}
+
+.modal-success .modal-header {
+  color: #10b981;
+}
+
+.modal-info .modal-header {
+  color: #3b82f6;
+}
+
+/* Modal Close Button */
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #6b7280;
+  z-index: 10;
+}
+
+.modal-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
+}
+
+@media (prefers-color-scheme: dark) {
+  .modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f3f4f6;
+  }
+}
+
+/* Modal Header */
+.modal-header {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .modal-header {
+    border-bottom-color: #374151;
+  }
+}
+
+.modal-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.modal-icon.danger {
+  color: #dc2626;
+}
+
+.modal-icon.warning {
+  color: #f59e0b;
+}
+
+.modal-icon.success {
+  color: #10b981;
+}
+
+.modal-icon.info {
+  color: #3b82f6;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+@media (prefers-color-scheme: dark) {
+  .modal-title {
+    color: #f3f4f6;
+  }
+}
+
+/* Modal Content */
+.modal-content {
+  padding: 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Confirm Modal Specific Styles */
+.confirm-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.confirm-message {
+  margin: 0;
+  color: #4b5563;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .confirm-message {
+    color: #d1d5db;
+  }
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* Button Styles */
+.btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #d1d5db;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-secondary {
+    background: #374151;
+    color: #d1d5db;
+  }
+  
+  .btn-secondary:hover:not(:disabled) {
+    background: #4b5563;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .modal {
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+  
+  .modal-overlay {
+    padding: 0;
+  }
+  
+  .confirm-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

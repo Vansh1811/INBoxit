@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const logger = require('./logger');
+const User = require('../models/User');
 
 class TokenManager {
   constructor() {
@@ -10,83 +11,137 @@ class TokenManager {
     );
   }
 
-  async refreshAccessToken(refreshToken) {
+  async refreshAccessToken(user) {
     try {
+      if (!user.refreshToken) {
+        throw new Error('REAUTH_REQUIRED: No refresh token available');
+      }
+
       this.oauth2Client.setCredentials({
-        refresh_token: refreshToken
+        refresh_token: user.refreshToken
       });
 
       const { credentials } = await this.oauth2Client.refreshAccessToken();
       
-      logger.info('Access token refreshed successfully');
-      
+      // Prepare update data
+      const tokenUpdate = {
+        accessToken: credentials.access_token,
+        tokenExpiry: credentials.expiry_date,
+        lastTokenRefresh: new Date()
+      };
+
+      // Keep existing refresh token if new one isn't provided
+      if (credentials.refresh_token) {
+        tokenUpdate.refreshToken = credentials.refresh_token;
+      }
+
+      // ✅ CRITICAL: Update database with new tokens
+      await User.findByIdAndUpdate(user._id, tokenUpdate);
+
+      logger.info('Token refreshed and persisted successfully', {
+        userId: user._id,
+        expiryDate: new Date(credentials.expiry_date)
+      });
+
       return {
         accessToken: credentials.access_token,
         expiryDate: credentials.expiry_date,
-        refreshToken: credentials.refresh_token || refreshToken // Keep existing if not provided
+        refreshToken: credentials.refresh_token || user.refreshToken
       };
+
     } catch (error) {
-      logger.error('Failed to refresh access token:', {
+      logger.error('Token refresh failed:', {
+        userId: user._id,
         error: error.message,
         code: error.code
       });
-      throw new Error('Token refresh failed');
+
+      // Handle specific Google OAuth errors
+      if (error.code === 400 && error.message.includes('invalid_grant')) {
+        throw new Error('REAUTH_REQUIRED: Refresh token expired');
+      }
+
+      throw new Error(`Token refresh failed: ${error.message}`);
     }
   }
 
   async validateAndRefreshToken(user) {
     if (!user.accessToken) {
-      throw new Error('No access token available');
+      throw new Error('REAUTH_REQUIRED: No access token available');
     }
 
-    // Check if token is expired or will expire soon (within 5 minutes)
+    // Check if token is expired or will expire soon (within 10 minutes)
     const now = Date.now();
-    const expiryBuffer = 5 * 60 * 1000; // 5 minutes
+    const expiryBuffer = 10 * 60 * 1000; // 10 minutes safety buffer
     
     if (user.tokenExpiry && (user.tokenExpiry - now) < expiryBuffer) {
       logger.info('Token expired or expiring soon, refreshing...', {
-        userId: user.id,
-        expiryDate: new Date(user.tokenExpiry)
+        userId: user._id,
+        expiryDate: new Date(user.tokenExpiry),
+        timeUntilExpiry: Math.round((user.tokenExpiry - now) / 1000 / 60) + ' minutes'
       });
 
-      if (!user.refreshToken) {
-        throw new Error('No refresh token available - user needs to re-authenticate');
-      }
-
-      const newTokens = await this.refreshAccessToken(user.refreshToken);
+      const newTokens = await this.refreshAccessToken(user);
       
-      // Update user object with new tokens
-      user.accessToken = newTokens.accessToken;
-      user.tokenExpiry = newTokens.expiryDate;
-      if (newTokens.refreshToken) {
-        user.refreshToken = newTokens.refreshToken;
-      }
-
-      return newTokens;
+      // Return updated tokens
+      return {
+        accessToken: newTokens.accessToken,
+        refreshToken: newTokens.refreshToken,
+        expiryDate: newTokens.expiryDate,
+        wasRefreshed: true
+      };
     }
 
     return {
       accessToken: user.accessToken,
       refreshToken: user.refreshToken,
-      expiryDate: user.tokenExpiry
+      expiryDate: user.tokenExpiry,
+      wasRefreshed: false
     };
   }
 
-  createGmailClient(accessToken) {
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_CALLBACK_URL
-    );
+  async createAuthenticatedGmailClient(userId) {
+    try {
+      // Get fresh user data from database
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
 
-    oauth2Client.setCredentials({
-      access_token: accessToken
-    });
+      const tokens = await this.validateAndRefreshToken(user);
+      
+      this.oauth2Client.setCredentials({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken
+      });
 
-    return google.gmail({
-      version: 'v1',
-      auth: oauth2Client
-    });
+      const gmail = google.gmail({
+        version: 'v1',
+        auth: this.oauth2Client
+      });
+
+      // Test the connection
+      await gmail.users.getProfile({ userId: 'me' });
+
+      logger.info('Gmail client created successfully', {
+        userId,
+        tokenRefreshed: tokens.wasRefreshed
+      });
+
+      return gmail;
+
+    } catch (error) {
+      logger.error('Failed to create Gmail client:', {
+        userId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  // Helper method for routes to get fresh Gmail client
+  async getGmailForUser(userId) {
+    return await this.createAuthenticatedGmailClient(userId);
   }
 }
 

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, Calendar, Globe, MoreVertical, Trash2, EyeOff, Undo2, Shield } from 'lucide-react';
+import { AlertTriangle, Calendar, Globe, MoreVertical, Trash2, EyeOff, Undo2, Shield, Mail } from 'lucide-react';
 import { showToast } from './ui/Toast';
+import { ConfirmModal } from './ui/Modal/Modal';
 import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector';
+import apiService from '../services/api';
 import './ServiceCard.css';
 
 function ServiceCard({ 
@@ -14,13 +16,18 @@ function ServiceCard({
   suspicious = false, 
   unsubscribed = false,
   ignored = false,
+  emailsDeleted = false,
+  deletedCount = 0,
   onUnsubscribe, 
-  onIgnore 
+  onIgnore,
+  onEmailsDeleted
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [suspiciousAnalysis, setSuspiciousAnalysis] = useState(null);
-  const [status, setStatus] = useState({ unsubscribed, ignored });
+  const [status, setStatus] = useState({ unsubscribed, ignored, emailsDeleted, deletedCount });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState(null);
 
   useEffect(() => {
     const analysis = suspiciousEmailDetector.analyzeService({ platform, email, domain, subject, date });
@@ -62,12 +69,51 @@ function ServiceCard({
         error: `❌ Restore failed`
       });
       await restorePromise;
-      setStatus({ unsubscribed: false, ignored: false });
+      setStatus({ unsubscribed: false, ignored: false, emailsDeleted: status.emailsDeleted, deletedCount: status.deletedCount });
       setShowActions(false);
     } catch (err) {
       console.error('Restore failed:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteEmails = async () => {
+    setIsLoading(true);
+    setShowDeleteModal(false);
+    
+    try {
+      const deleteToast = showToast.loading(`Deleting emails from ${platform}...`);
+      
+      const result = await apiService.deletePlatformEmails(domain, {
+        maxEmails: 50,
+        spamOnly: true
+      });
+      
+      showToast.dismiss(deleteToast);
+      
+      if (result.success) {
+        setStatus(prev => ({
+          ...prev,
+          emailsDeleted: true,
+          deletedCount: result.deleted
+        }));
+        
+        showToast.success(`✅ Deleted ${result.deleted} emails from ${platform}`);
+        
+        // Call parent callback if provided
+        if (onEmailsDeleted) {
+          onEmailsDeleted(domain, result.deleted);
+        }
+      } else {
+        throw new Error(result.message || 'Deletion failed');
+      }
+    } catch (err) {
+      console.error('Email deletion failed:', err);
+      showToast.error(`❌ Failed to delete emails: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+      setDeleteProgress(null);
     }
   };
 
@@ -172,12 +218,31 @@ function ServiceCard({
                         <button onClick={() => handleAction('ignore')} disabled={isLoading}>
                           <EyeOff className="w-4 h-4" /> Ignore
                         </button>
+                        <button 
+                          onClick={() => setShowDeleteModal(true)} 
+                          disabled={isLoading || status.emailsDeleted}
+                          className="delete-emails-btn"
+                        >
+                          <Mail className="w-4 h-4" /> 
+                          {status.emailsDeleted ? `${status.deletedCount} Deleted` : 'Delete Emails'}
+                        </button>
                       </>
                     )}
                     {(status.unsubscribed || status.ignored) && (
-                      <button onClick={handleRestore} disabled={isLoading}>
-                        <Undo2 className="w-4 h-4" /> Restore
-                      </button>
+                      <>
+                        <button onClick={handleRestore} disabled={isLoading}>
+                          <Undo2 className="w-4 h-4" /> Restore
+                        </button>
+                        {!status.emailsDeleted && (
+                          <button 
+                            onClick={() => setShowDeleteModal(true)} 
+                            disabled={isLoading}
+                            className="delete-emails-btn"
+                          >
+                            <Mail className="w-4 h-4" /> Delete Emails
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </motion.div>
@@ -229,6 +294,15 @@ function ServiceCard({
             <button onClick={() => handleAction('ignore')} disabled={isLoading}>
               <EyeOff className="w-4 h-4" /> {isLoading ? 'Processing...' : 'Ignore'}
             </button>
+            {!status.emailsDeleted && (
+              <button 
+                onClick={() => setShowDeleteModal(true)} 
+                disabled={isLoading}
+                className="delete-emails-btn"
+              >
+                <Mail className="w-4 h-4" /> Delete Emails
+              </button>
+            )}
           </motion.div>
         )}
 
@@ -245,6 +319,31 @@ function ServiceCard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Email deletion status badge */}
+      {status.emailsDeleted && (
+        <motion.div 
+          className="deletion-status-badge"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <Mail className="w-4 h-4" />
+          <span>{status.deletedCount} emails deleted</span>
+        </motion.div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteEmails}
+        title="Delete Platform Emails"
+        message={`Are you sure you want to delete all emails from ${platform} (${domain})? This will move up to 50 emails to your Gmail trash where they will be permanently deleted after 30 days.`}
+        confirmText="Delete Emails"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={isLoading}
+      />
     </motion.div>
   );
 }

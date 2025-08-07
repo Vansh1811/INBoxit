@@ -1,13 +1,15 @@
-<<<<<<< HEAD
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { Search, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Eye, EyeOff, Mail, History, Trash2 } from 'lucide-react';
 import ServiceCard from '../components/ServiceCard';
 import SearchBar from '../components/ui/SearchBar';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ProgressBar from '../components/ui/ProgressBar';
 import AnimatedCard from '../components/ui/AnimatedCard';
 import { ToastContainer, showToast } from '../components/ui/Toast';
+import { ConfirmModal } from '../components/ui/Modal/Modal';
+import DeletionHistory from '../components/DeletionHistory';
 import { useSearch } from '../hooks/useSearch';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { suspiciousEmailDetector } from '../utils/suspiciousEmailDetector';
@@ -22,6 +24,10 @@ function Dashboard() {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [viewMode, setViewMode] = useLocalStorage('dashboard-view-mode', 'all');
   const [scanProgress, setScanProgress] = useState(0);
+  const [selectedServices, setSelectedServices] = useState([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [showDeletionHistory, setShowDeletionHistory] = useState(false);
 
   const searchFilters = [
     { id: 'active', label: 'Active Services', count: services.filter(s => !s.unsubscribed && !s.ignored).length },
@@ -177,6 +183,73 @@ function Dashboard() {
     }
   };
 
+  const handleBulkDeleteEmails = async () => {
+    setBulkDeleteLoading(true);
+    setShowBulkDeleteModal(false);
+    const loadingToast = showToast.loading(`Deleting emails from ${selectedServices.length} platforms...`);
+    
+    try {
+      const result = await apiService.bulkDeleteEmails(selectedServices, 25);
+      
+      showToast.dismiss(loadingToast);
+      
+      if (result.success) {
+        // Update services with deletion status
+        setServices(prev => prev.map(service => {
+          const deletionResult = result.results.find(r => r.domain === service.domain);
+          if (deletionResult && deletionResult.deleted > 0) {
+            return {
+              ...service,
+              emailsDeleted: true,
+              deletedCount: deletionResult.deleted
+            };
+          }
+          return service;
+        }));
+        
+        showToast.success(`✅ Deleted ${result.totalDeleted} emails from ${selectedServices.length} platforms`);
+        setSelectedServices([]);
+      } else {
+        throw new Error(result.message || 'Bulk deletion failed');
+      }
+    } catch (error) {
+      showToast.dismiss(loadingToast);
+      showToast.error(`❌ Failed to delete emails: ${error.message}`);
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  };
+
+  const handleServiceSelection = (domain) => {
+    setSelectedServices(prev => {
+      if (prev.includes(domain)) {
+        return prev.filter(d => d !== domain);
+      }
+      if (prev.length >= 10) {
+        showToast.warning('Maximum 10 platforms can be selected for bulk operations');
+        return prev;
+      }
+      return [...prev, domain];
+    });
+  };
+
+  const handleSelectAll = () => {
+    const visibleDomains = displayServices.slice(0, 10).map(s => s.domain);
+    setSelectedServices(visibleDomains);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedServices([]);
+  };
+
+  const handleEmailsDeleted = (domain, count) => {
+    setServices(prev => prev.map(service => 
+      service.domain === domain 
+        ? { ...service, emailsDeleted: true, deletedCount: count }
+        : service
+    ));
+  };
+
   const getFilteredServicesByView = () => {
     switch (viewMode) {
       case 'active':
@@ -262,6 +335,16 @@ function Dashboard() {
                 Refresh Services
               </>
             )}
+          </motion.button>
+          <motion.button
+            className="history-btn"
+            onClick={() => setShowDeletionHistory(true)}
+            variants={itemVariants}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <History className="w-4 h-4" />
+            Deletion History
           </motion.button>
         </div>
       </div>
@@ -400,40 +483,94 @@ function Dashboard() {
       <AnimatePresence mode="wait">
         {displayServices.length > 0 && (
           <motion.div className="services-section" variants={itemVariants} key={viewMode}>
-            <motion.h2 className="section-title" variants={itemVariants}>
-              {viewMode === 'all' && `📧 All Services (${displayServices.length})`}
-              {viewMode === 'active' && `🔴 Active Services (${displayServices.length})`}
-              {viewMode === 'managed' && `✅ Managed Services (${displayServices.length})`}
-              {viewMode === 'suspicious' && `⚠️ Suspicious Services (${displayServices.length})`}
-            </motion.h2>
+            <div className="section-header">
+              <motion.h2 className="section-title" variants={itemVariants}>
+                {viewMode === 'all' && `📧 All Services (${displayServices.length})`}
+                {viewMode === 'active' && `🔴 Active Services (${displayServices.length})`}
+                {viewMode === 'managed' && `✅ Managed Services (${displayServices.length})`}
+                {viewMode === 'suspicious' && `⚠️ Suspicious Services (${displayServices.length})`}
+              </motion.h2>
+              
+              {selectedServices.length > 0 && (
+                <motion.div 
+                  className="bulk-actions"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                >
+                  <span className="selection-count">
+                    {selectedServices.length} selected
+                  </span>
+                  <button 
+                    className="bulk-delete-btn"
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    disabled={bulkDeleteLoading}
+                  >
+                    <Mail className="w-4 h-4" />
+                    Delete Emails
+                  </button>
+                  <button 
+                    className="clear-selection-btn"
+                    onClick={handleClearSelection}
+                  >
+                    Clear
+                  </button>
+                </motion.div>
+              )}
+            </div>
 
             <motion.div className="services-grid" variants={containerVariants} initial="hidden" animate="visible">
               <AnimatePresence>
                 {displayServices.map((service, index) => (
-                  <ServiceCard
-                    key={service.domain || index}
-                    platform={service.platform}
-                    email={service.email}
-                    domain={service.domain}
-                    subject={service.subject}
-                    date={service.date}
-                    suspicious={service.suspicious || service.suspiciousAnalysis?.isSuspicious}
-                    unsubscribed={service.unsubscribed}
-                    ignored={service.ignored}
-                    onUnsubscribe={handleUnsubscribe}
-                    onIgnore={handleIgnore}
-                  />
+                  <div key={service.domain || index} className="service-card-wrapper">
+                    <input
+                      type="checkbox"
+                      className="service-checkbox"
+                      checked={selectedServices.includes(service.domain)}
+                      onChange={() => handleServiceSelection(service.domain)}
+                    />
+                    <ServiceCard
+                      platform={service.platform}
+                      email={service.email}
+                      domain={service.domain}
+                      subject={service.subject}
+                      date={service.date}
+                      suspicious={service.suspicious || service.suspiciousAnalysis?.isSuspicious}
+                      unsubscribed={service.unsubscribed}
+                      ignored={service.ignored}
+                      emailsDeleted={service.emailsDeleted}
+                      deletedCount={service.deletedCount || 0}
+                      onUnsubscribe={handleUnsubscribe}
+                      onIgnore={handleIgnore}
+                      onEmailsDeleted={handleEmailsDeleted}
+                    />
+                  </div>
                 ))}
               </AnimatePresence>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showBulkDeleteModal}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={handleBulkDeleteEmails}
+        title="Bulk Delete Emails"
+        message={`Are you sure you want to delete emails from ${selectedServices.length} selected platforms? This will move up to ${selectedServices.length * 25} emails to your Gmail trash.`}
+        confirmText="Delete All Emails"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={bulkDeleteLoading}
+      />
+
+      {/* Deletion History Panel */}
+      <DeletionHistory 
+        isOpen={showDeletionHistory}
+        onClose={() => setShowDeletionHistory(false)}
+      />
     </motion.div>
   );
 }
 
 export default Dashboard;
-=======
-{"code":"rate-limited","message":"You have hit the rate limit. Please upgrade to keep chatting.","providerLimitHit":false,"isRetryable":true}
->>>>>>> 2a63b5ef8fb2e0fba5897b9255366c028fd10bf4

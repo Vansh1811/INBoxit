@@ -153,6 +153,39 @@ class ApiService {
       throw new Error('Batch update failed');
     }
   }
+
+  // Email Deletion Methods
+  async deletePlatformEmails(domain, options = {}) {
+    const { maxEmails = 50, spamOnly = true } = options;
+    return this.request('/gmail/delete-platform-emails', {
+      method: 'POST',
+      body: JSON.stringify({ domain, maxEmails, spamOnly }),
+    });
+  }
+
+  async bulkDeleteEmails(domains, maxEmailsPerDomain = 25) {
+    if (!Array.isArray(domains) || domains.length === 0) {
+      throw new Error('Domains must be a non-empty array');
+    }
+    
+    if (domains.length > 10) {
+      throw new Error('Maximum 10 domains allowed per bulk operation');
+    }
+    
+    return this.request('/gmail/bulk-delete-emails', {
+      method: 'POST',
+      body: JSON.stringify({ domains, maxEmailsPerDomain }),
+    });
+  }
+
+  async getDeletionHistory(page = 1, limit = 20) {
+    return this.request(`/gmail/deletion-history?page=${page}&limit=${limit}`);
+  }
+
+  // Get email preview before deletion
+  async getEmailPreview(domain, limit = 5) {
+    return this.request(`/gmail/email-preview?domain=${encodeURIComponent(domain)}&limit=${limit}`);
+  }
 }
 
 // Create and export a singleton instance
